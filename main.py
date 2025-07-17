@@ -1,16 +1,18 @@
-# This is a sample Python script.
+from A_star_algorithm import Graph, a_star_search, reconstruct_path
 
-# Press Shift+F10 to execute it or replace it with your code.
-# Press Double Shift to search everywhere for classes, files, tool windows, actions, and settings.
+def main():
+    graph = Graph()
+    graph.add_edge('A', 'B', 1)
+    graph.add_edge('A', 'C', 4)
+    graph.add_edge('B', 'C', 1)
+    graph.add_edge('B', 'D', 3)
 
+    start = 'A'
+    goal = 'D'
 
-def print_hi(name):
-    # Use a breakpoint in the code line below to debug your script.
-    print(f'Hi, {name}')  # Press Ctrl+F8 to toggle the breakpoint.
+    came_from, cost_so_far = a_star_search(graph, start, goal)
+    print(f"从{start}到{goal}的最短路径长度：", cost_so_far[goal])
+    print("最短路径：", reconstruct_path(came_from, start, goal))
 
-
-# Press the green button in the gutter to run the script.
-if __name__ == '__main__':
-    print_hi('PyCharm')
-
-# See PyCharm help at https://www.jetbrains.com/help/pycharm/
+if __name__ == "__main__":
+    main()
