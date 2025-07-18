@@ -1,11 +1,12 @@
 import pygame
+import random
 from queue import PriorityQueue
 
 # ------------- 基础参数 -------------
 GRID_SIZE = 10
 CELL_SIZE = 40
 WINDOW_SIZE = GRID_SIZE * CELL_SIZE
-OBSTACLES = {(3, 3), (3, 4), (3, 5), (5, 6), (5, 7)}  # 随便设置几个障碍
+OBSTACLES = 15  # 随便设置几个障碍
 
 
 # ------------- A* 图结构 -------------
@@ -65,6 +66,50 @@ def reconstruct_path(came_from, start, goal):
     return path
 
 
+# --------- 随机生成障碍和初始位置 ---------
+def random_obstacles_and_positions(grid_size, obstacle_count):
+    positions = [(x, y) for x in range(grid_size) for y in range(grid_size)]
+    # 随机选障碍物
+    obstacles = set(random.sample(positions, obstacle_count))
+
+    # 找合法初始位置
+    def pick_two_far_points(min_dist):
+        empties = [p for p in positions if p not in obstacles]
+        while True:
+            p1, p2 = random.sample(empties, 2)
+            dist = abs(p1[0] - p2[0]) + abs(p1[1] - p2[1])
+            if dist >= min_dist:
+                return p1, p2
+
+    player_pos, zombie_pos = pick_two_far_points(min_dist=5)
+    return obstacles, player_pos, zombie_pos
+
+
+# ---------- OO 角色定义 ----------
+class Player:
+    def __init__(self, pos):
+        self.pos = pos
+
+    def move(self, direction, obstacles):
+        x, y = self.pos
+        dx, dy = direction
+        nx, ny = x + dx, y + dy
+        if 0 <= nx < GRID_SIZE and 0 <= ny < GRID_SIZE and (nx, ny) not in obstacles:
+            self.pos = (nx, ny)
+
+
+class Zombie:
+    def __init__(self, pos):
+        self.pos = pos
+
+    def chase(self, target_pos, graph):
+        came_from, _ = a_star_search(graph, self.pos, target_pos)
+        path = reconstruct_path(came_from, self.pos, target_pos)
+        if len(path) > 1:
+            self.pos = path[1]
+        return path
+
+
 # ----------- 生成格子地图 -----------
 def build_graph_with_obstacles(grid_size, obstacles):
     g = Graph()
@@ -86,10 +131,12 @@ def main():
     screen = pygame.display.set_mode((WINDOW_SIZE, WINDOW_SIZE))
     clock = pygame.time.Clock()
 
-    player_pos = (0, 0)
-    zombie_pos = (GRID_SIZE - 1, GRID_SIZE - 1)
+    # 随机生成障碍和起始点
+    obstacles, player_start, zombie_start = random_obstacles_and_positions(GRID_SIZE, OBSTACLES)
+    player = Player(player_start)
+    zombie = Zombie(zombie_start)
+    graph = build_graph_with_obstacles(GRID_SIZE, obstacles)
 
-    graph = build_graph_with_obstacles(GRID_SIZE, OBSTACLES)
 
     running = True
     zombie_step_counter = 0
@@ -102,25 +149,24 @@ def main():
 
         # 玩家移动，不能穿越障碍
         keys = pygame.key.get_pressed()
-        px, py = player_pos
-        for dx, dy, key in [(-1, 0, pygame.K_LEFT), (1, 0, pygame.K_RIGHT), (0, -1, pygame.K_UP),
-                            (0, 1, pygame.K_DOWN)]:
+        directions = {
+            pygame.K_LEFT: (-1, 0),
+            pygame.K_RIGHT: (1, 0),
+            pygame.K_UP: (0, -1),
+            pygame.K_DOWN: (0, 1),
+        }
+        for key, dir in directions.items():
             if keys[key]:
-                nx, ny = px + dx, py + dy
-                if 0 <= nx < GRID_SIZE and 0 <= ny < GRID_SIZE and (nx, ny) not in OBSTACLES:
-                    player_pos = (nx, ny)
-                    break
+                player.move(dir, obstacles)
+                break
 
         # 僵尸每5帧A*一次
         zombie_step_counter += 1
         if zombie_step_counter % 5 == 0:
-            came_from, _ = a_star_search(graph, zombie_pos, player_pos)
-            path = reconstruct_path(came_from, zombie_pos, player_pos)
-            if len(path) > 1:  # 如果路径长度大于1
-                zombie_pos = path[1]  # 僵尸向你移动一步
+            path = zombie.chase(player.pos, graph)
 
         # 判断是否Game Over
-        if zombie_pos == player_pos:
+        if zombie.pos == player.pos:
             print("Game Over! 被僵尸追上了！")
             running = False
 
@@ -132,18 +178,16 @@ def main():
                 rect = pygame.Rect(x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE)
                 pygame.draw.rect(screen, (50, 50, 50), rect, 1)
         # 画障碍
-        for ox, oy in OBSTACLES:
+        for ox, oy in obstacles:
             pygame.draw.rect(screen, (120, 120, 120), (ox * CELL_SIZE, oy * CELL_SIZE, CELL_SIZE, CELL_SIZE))
-        # 画玩家
-        pygame.draw.rect(screen, (0, 255, 0),
-                         (player_pos[0] * CELL_SIZE, player_pos[1] * CELL_SIZE, CELL_SIZE, CELL_SIZE))
-        # 画僵尸
-        pygame.draw.rect(screen, (255, 60, 60),
-                         (zombie_pos[0] * CELL_SIZE, zombie_pos[1] * CELL_SIZE, CELL_SIZE, CELL_SIZE))
+            pygame.draw.rect(screen, (0, 255, 0),
+                             (player.pos[0] * CELL_SIZE, player.pos[1] * CELL_SIZE, CELL_SIZE, CELL_SIZE))
+            pygame.draw.rect(screen, (255, 60, 60),
+                             (zombie.pos[0] * CELL_SIZE, zombie.pos[1] * CELL_SIZE, CELL_SIZE, CELL_SIZE))
         # 路径可视化
-        for p in path[1:]:
-            pygame.draw.circle(screen, (0, 255, 255),
-                               (p[0] * CELL_SIZE + CELL_SIZE // 2, p[1] * CELL_SIZE + CELL_SIZE // 2), 8)
+        # for p in path[1:]:
+        #     pygame.draw.circle(screen, (0, 255, 255),
+        #                        (p[0] * CELL_SIZE + CELL_SIZE // 2, p[1] * CELL_SIZE + CELL_SIZE // 2), 8)
 
         pygame.display.flip()
         clock.tick(15)
