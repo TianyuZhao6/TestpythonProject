@@ -26,12 +26,12 @@ class Graph:
     def cost(self, from_node, to_node):
         return self.weights.get((from_node, to_node), float('inf'))
 
-# def heuristic(a, b):
-#     # 估算a到b的距离
-#     return abs(a[0]-b[0]) + abs(a[1]-b[1])
-
 def heuristic(a, b):
-    return 0
+    # 估算a到b的距离
+    return abs(a[0]-b[0]) + abs(a[1]-b[1])
+
+# def heuristic(a, b):
+#     return 0
 
 
 def a_star_search(graph, start, goal):
