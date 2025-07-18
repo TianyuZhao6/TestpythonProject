@@ -3,13 +3,14 @@ import random
 from queue import PriorityQueue
 
 # ------------- 基础参数 -------------
-GRID_SIZE = 10
+GRID_SIZE = 18
 CELL_SIZE = 40
 WINDOW_SIZE = GRID_SIZE * CELL_SIZE
-OBSTACLES = 15  # 随便设置几个障碍
+OBSTACLES = 25
+ITEMS = 10
 
 
-# ------------- A* 图结构 -------------
+# ------------- A* 图结构 -------------a
 class Graph:
     def __init__(self):
         self.edges = {}
@@ -66,8 +67,8 @@ def reconstruct_path(came_from, start, goal):
     return path
 
 
-# --------- 随机生成障碍和初始位置 ---------
-def random_obstacles_and_positions(grid_size, obstacle_count):
+# --------- 随机生成障碍和初始位置及奖励 ---------
+def random_obstacles_and_positions(grid_size, obstacle_count, item_count):
     positions = [(x, y) for x in range(grid_size) for y in range(grid_size)]
     # 随机选障碍物
     obstacles = set(random.sample(positions, obstacle_count))
@@ -82,7 +83,11 @@ def random_obstacles_and_positions(grid_size, obstacle_count):
                 return p1, p2
 
     player_pos, zombie_pos = pick_two_far_points(min_dist=5)
-    return obstacles, player_pos, zombie_pos
+    # 随机生成道具，不能和障碍/起点/终点重叠
+    forbidden = obstacles | {player_pos, zombie_pos}
+    valid = [p for p in positions if p not in forbidden]
+    items = set(random.sample(valid, item_count))
+    return obstacles, items, player_pos, zombie_pos
 
 
 # ---------- OO 角色定义 ----------
@@ -131,16 +136,17 @@ def main():
     screen = pygame.display.set_mode((WINDOW_SIZE, WINDOW_SIZE))
     clock = pygame.time.Clock()
 
-    # 随机生成障碍和起始点
-    obstacles, player_start, zombie_start = random_obstacles_and_positions(GRID_SIZE, OBSTACLES)
+    # 随机生成障碍和起始点及奖励
+    obstacles, items, player_start, zombie_start = random_obstacles_and_positions(GRID_SIZE, OBSTACLES,ITEMS)
     player = Player(player_start)
     zombie = Zombie(zombie_start)
     graph = build_graph_with_obstacles(GRID_SIZE, obstacles)
 
-
     running = True
     zombie_step_counter = 0
     path = []
+    font = pygame.font.SysFont(None, 40)
+    game_result = None  # "success" or "fail"
 
     while running:
         for event in pygame.event.get():
@@ -150,15 +156,19 @@ def main():
         # 玩家移动，不能穿越障碍
         keys = pygame.key.get_pressed()
         directions = {
-            pygame.K_LEFT: (-1, 0),
-            pygame.K_RIGHT: (1, 0),
-            pygame.K_UP: (0, -1),
-            pygame.K_DOWN: (0, 1),
+            pygame.K_a: (-1, 0),
+            pygame.K_d: (1, 0),
+            pygame.K_w: (0, -1),
+            pygame.K_s: (0, 1),
         }
         for key, dir in directions.items():
             if keys[key]:
                 player.move(dir, obstacles)
                 break
+
+        # 检查拾取道具
+        if player.pos in items:
+            items.remove(player.pos)
 
         # 僵尸每5帧A*一次
         zombie_step_counter += 1
@@ -167,7 +177,14 @@ def main():
 
         # 判断是否Game Over
         if zombie.pos == player.pos:
-            print("Game Over! 被僵尸追上了！")
+            print("GG! Failure！")
+            game_result = "fail"
+            running = False
+
+        # 判断胜利
+        if not items and game_result is None:
+            print("Success! Winning! ")
+            game_result = "success"
             running = False
 
         # ------- 绘图部分 -------
@@ -177,6 +194,14 @@ def main():
             for y in range(GRID_SIZE):
                 rect = pygame.Rect(x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE)
                 pygame.draw.rect(screen, (50, 50, 50), rect, 1)
+        # 奖励道具
+        for ix, iy in items:
+            pygame.draw.circle(screen, (255, 255, 0),
+                               (ix * CELL_SIZE + CELL_SIZE // 2, iy * CELL_SIZE + CELL_SIZE // 2), CELL_SIZE // 3)
+        pygame.draw.rect(screen, (0, 255, 0),
+                         (player.pos[0] * CELL_SIZE, player.pos[1] * CELL_SIZE, CELL_SIZE, CELL_SIZE))
+        pygame.draw.rect(screen, (255, 60, 60),
+                         (zombie.pos[0] * CELL_SIZE, zombie.pos[1] * CELL_SIZE, CELL_SIZE, CELL_SIZE))
         # 画障碍
         for ox, oy in obstacles:
             pygame.draw.rect(screen, (120, 120, 120), (ox * CELL_SIZE, oy * CELL_SIZE, CELL_SIZE, CELL_SIZE))
@@ -191,7 +216,15 @@ def main():
 
         pygame.display.flip()
         clock.tick(15)
-
+    # 显示结果
+    screen.fill((0, 0, 0))
+    if game_result == "success":
+        txt = font.render("SUCCESS! All items collected!", True, (0, 255, 0))
+    else:
+        txt = font.render("GAME OVER! Caught by zombie ", True, (255, 60, 60))
+    screen.blit(txt, (40, WINDOW_SIZE // 2 - 30))
+    pygame.display.flip()
+    pygame.time.wait(2000)
     pygame.quit()
 
 
