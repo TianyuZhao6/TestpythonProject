@@ -7,6 +7,7 @@ CELL_SIZE = 40
 WINDOW_SIZE = GRID_SIZE * CELL_SIZE
 OBSTACLES = {(3, 3), (3, 4), (3, 5), (5, 6), (5, 7)}  # 随便设置几个障碍
 
+
 # ------------- A* 图结构 -------------
 class Graph:
     def __init__(self):
@@ -25,9 +26,11 @@ class Graph:
     def cost(self, from_node, to_node):
         return self.weights.get((from_node, to_node), float('inf'))
 
+
 def heuristic(a, b):
     # 曼哈顿距离，适合格子图
     return abs(a[0] - b[0]) + abs(a[1] - b[1])
+
 
 def a_star_search(graph, start, goal):
     frontier = PriorityQueue()
@@ -48,6 +51,7 @@ def a_star_search(graph, start, goal):
                 came_from[next] = current
     return came_from, cost_so_far
 
+
 def reconstruct_path(came_from, start, goal):
     if goal not in came_from:
         return [start]
@@ -60,6 +64,7 @@ def reconstruct_path(came_from, start, goal):
     path.reverse()
     return path
 
+
 # ----------- 生成格子地图 -----------
 def build_graph_with_obstacles(grid_size, obstacles):
     g = Graph()
@@ -67,12 +72,13 @@ def build_graph_with_obstacles(grid_size, obstacles):
         for y in range(grid_size):
             if (x, y) in obstacles:
                 continue
-            for dx, dy in [(-1,0),(1,0),(0,-1),(0,1)]:
-                nx, ny = x+dx, y+dy
+            for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
+                nx, ny = x + dx, y + dy
                 if 0 <= nx < grid_size and 0 <= ny < grid_size:
                     if (nx, ny) not in obstacles:
                         g.add_edge((x, y), (nx, ny), 1)
     return g
+
 
 # ------------ pygame主循环 ----------
 def main():
@@ -97,7 +103,8 @@ def main():
         # 玩家移动，不能穿越障碍
         keys = pygame.key.get_pressed()
         px, py = player_pos
-        for dx, dy, key in [(-1,0,pygame.K_LEFT), (1,0,pygame.K_RIGHT), (0,-1,pygame.K_UP), (0,1,pygame.K_DOWN)]:
+        for dx, dy, key in [(-1, 0, pygame.K_LEFT), (1, 0, pygame.K_RIGHT), (0, -1, pygame.K_UP),
+                            (0, 1, pygame.K_DOWN)]:
             if keys[key]:
                 nx, ny = px + dx, py + dy
                 if 0 <= nx < GRID_SIZE and 0 <= ny < GRID_SIZE and (nx, ny) not in OBSTACLES:
@@ -109,3 +116,40 @@ def main():
         if zombie_step_counter % 5 == 0:
             came_from, _ = a_star_search(graph, zombie_pos, player_pos)
             path = reconstruct_path(came_from, zombie_pos, player_pos)
+            if len(path) > 1:  # 如果路径长度大于1
+                zombie_pos = path[1]  # 僵尸向你移动一步
+
+        # 判断是否Game Over
+        if zombie_pos == player_pos:
+            print("Game Over! 被僵尸追上了！")
+            running = False
+
+        # ------- 绘图部分 -------
+        screen.fill((20, 20, 20))
+        # 画网格
+        for x in range(GRID_SIZE):
+            for y in range(GRID_SIZE):
+                rect = pygame.Rect(x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE)
+                pygame.draw.rect(screen, (50, 50, 50), rect, 1)
+        # 画障碍
+        for ox, oy in OBSTACLES:
+            pygame.draw.rect(screen, (120, 120, 120), (ox * CELL_SIZE, oy * CELL_SIZE, CELL_SIZE, CELL_SIZE))
+        # 画玩家
+        pygame.draw.rect(screen, (0, 255, 0),
+                         (player_pos[0] * CELL_SIZE, player_pos[1] * CELL_SIZE, CELL_SIZE, CELL_SIZE))
+        # 画僵尸
+        pygame.draw.rect(screen, (255, 60, 60),
+                         (zombie_pos[0] * CELL_SIZE, zombie_pos[1] * CELL_SIZE, CELL_SIZE, CELL_SIZE))
+        # 路径可视化
+        for p in path[1:]:
+            pygame.draw.circle(screen, (0, 255, 255),
+                               (p[0] * CELL_SIZE + CELL_SIZE // 2, p[1] * CELL_SIZE + CELL_SIZE // 2), 8)
+
+        pygame.display.flip()
+        clock.tick(15)
+
+    pygame.quit()
+
+
+if __name__ == "__main__":
+    main()
