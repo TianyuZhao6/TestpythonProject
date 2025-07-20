@@ -7,6 +7,9 @@ GRID_SIZE = 18
 CELL_SIZE = 40
 WINDOW_SIZE = GRID_SIZE * CELL_SIZE
 OBSTACLES = 25
+OBSTACLE_HEALTH = 12  # 可破坏障碍物初始血量
+DESTRUCTIBLE_RATIO = 0.4
+ZOMBIE_ATTACK = 1     # 僵尸攻击力
 ITEMS = 10
 
 
@@ -27,6 +30,17 @@ class Graph:
 
     def cost(self, from_node, to_node):
         return self.weights.get((from_node, to_node), float('inf'))
+
+
+# ---------- 障碍物类 ----------
+class Obstacle:
+    def __init__(self, pos, type, hp=None):
+        self.pos = pos
+        self.type = type  # "Destructible" or "Indestructible"
+        self.hp = hp
+
+    def is_destroyed(self):
+        return self.type == "Destructible" and self.hp <= 0
 
 
 def heuristic(a, b):
@@ -71,7 +85,17 @@ def reconstruct_path(came_from, start, goal):
 def random_obstacles_and_positions(grid_size, obstacle_count, item_count):
     positions = [(x, y) for x in range(grid_size) for y in range(grid_size)]
     # 随机选障碍物
+    chosen = random.sample(positions, obstacle_count)
+    destruct_count = int(obstacle_count * DESTRUCTIBLE_RATIO)
+    indestruct_count = obstacle_count - destruct_count
     obstacles = set(random.sample(positions, obstacle_count))
+
+    # 可破坏障碍物
+    for p in chosen[:destruct_count]:
+        obstacles[p] = Obstacle(p, "Destructible", hp=OBSTACLE_HEALTH)
+    # 不可破坏障碍物
+    for p in chosen[destruct_count:]:
+        obstacles[p] = Obstacle(p, "Indestructible")
 
     # 找合法初始位置
     def pick_two_far_points(min_dist):
