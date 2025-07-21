@@ -11,7 +11,7 @@ WINDOW_SIZE = GRID_SIZE * CELL_SIZE
 OBSTACLES = 25
 OBSTACLE_HEALTH = 0.2  # 可破坏障碍物初始血量
 DESTRUCTIBLE_RATIO = 0.4
-ZOMBIE_ATTACK = 22     # 僵尸攻击力
+ZOMBIE_ATTACK = 22  # 僵尸攻击力
 ITEMS = 10
 
 
@@ -312,3 +312,9 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+# TODO
+#  ADDING MULTIPLE TYPE/ NUMBER OF MONSTER AGAINST PLAYER
+#  Possibly increase player ability?
+#  Adding more interaction with the blocks and other feature on map
+#  Adding multiple chapters after completing single one
