@@ -1,9 +1,9 @@
 import pygame
+import math
 import random
 from queue import PriorityQueue
 
 # ------------- 基础参数 -------------
-from pygame import math
 
 GRID_SIZE = 18
 CELL_SIZE = 40
@@ -151,6 +151,7 @@ class Zombie:
         path = reconstruct_path(came_from, self.pos, target_pos)
         if len(path) > 1:
             next_pos = path[1]
+            # 如果下一个位置是可破坏障碍物
             if next_pos in obstacles and obstacles[next_pos].type == "Destructible":
                 # 攻击障碍
                 obstacles[next_pos].hp -= ZOMBIE_ATTACK
@@ -161,11 +162,13 @@ class Zombie:
                     return "destroy", next_pos
                 else:
                     return "attack", next_pos
+
             elif next_pos not in obstacles:
                 self.pos = next_pos
                 self.breaking_obstacle = None
                 return "move", next_pos
-            return "idle", self.pos
+
+        return "idle", self.pos
 
 
 # ----------- 生成格子地图 -----------
@@ -239,7 +242,14 @@ def main():
         # 僵尸每5帧A*一次
         zombie_step_counter += 1
         if zombie_step_counter % 5 == 0:
-            path = zombie.chase(player.pos, graph, obstacles)
+            action, pos = zombie.chase(player.pos, graph, obstacles)
+
+            # 如果障碍物被破坏，重新构建图
+            if action == "destroy":
+                graph = build_graph_with_obstacles(GRID_SIZE, obstacles)
+            # 如果是移动动作，更新僵尸位置
+            if action == "move":
+                zombie.pos = pos
 
         # 判断是否Game Over
         if zombie.pos == player.pos:
@@ -296,7 +306,7 @@ def main():
         txt = font.render("GAME OVER! Caught by zombie ", True, (255, 60, 60))
     screen.blit(txt, (40, WINDOW_SIZE // 2 - 30))
     pygame.display.flip()
-    pygame.time.wait(2000)
+    pygame.time.wait(1500)
     pygame.quit()
 
 
