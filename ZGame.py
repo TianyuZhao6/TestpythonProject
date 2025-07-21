@@ -173,13 +173,26 @@ def build_graph_with_obstacles(grid_size, obstacles):
     g = Graph()
     for x in range(grid_size):
         for y in range(grid_size):
-            if (x, y) in obstacles:
+            # 跳过不可破坏障碍物
+            if (x, y) in obstacles and obstacles[(x, y)].type == "Indestructible":
                 continue
+
             for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
                 nx, ny = x + dx, y + dy
                 if 0 <= nx < grid_size and 0 <= ny < grid_size:
-                    if (nx, ny) not in obstacles:
-                        g.add_edge((x, y), (nx, ny), 1)
+                    # 跳过不可破坏障碍物
+                    if (nx, ny) in obstacles and obstacles[(nx, ny)].type == "Indestructible":
+                        continue
+
+                    # 添加边并设置权重
+                    weight = 1
+
+                    # 如果是可破坏障碍物，增加权重
+                    if (nx, ny) in obstacles and obstacles[(nx, ny)].type == "Destructible":
+                        # 显著增加破坏障碍物的代价，确保优先选择破坏
+                        weight = 10  # 基础代价
+
+                    g.add_edge((x, y), (nx, ny), weight)
     return g
 
 
