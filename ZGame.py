@@ -315,7 +315,7 @@ if __name__ == "__main__":
     main()
 
 # TODO
-#  ADDING MULTIPLE TYPE/ NUMBER OF MONSTER AGAINST PLAYER
-#  Possibly increase player ability?
+#  ADDING MULTIPLE TYPE/ NUMBER OF MONSTER AGAINST PLAYER  DONE
+#  Possibly increase player ability/ Balancing the speed of Zombies & Player
 #  Adding more interaction with the blocks and other feature on map
 #  Adding multiple chapters after completing single one
