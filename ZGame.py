@@ -9,9 +9,10 @@ GRID_SIZE = 18
 CELL_SIZE = 40
 WINDOW_SIZE = GRID_SIZE * CELL_SIZE
 OBSTACLES = 25
-OBSTACLE_HEALTH = 0.2  # 可破坏障碍物初始血量
+OBSTACLE_HEALTH = 20  # 可破坏障碍物初始血量
 DESTRUCTIBLE_RATIO = 0.4
-ZOMBIE_ATTACK = 22  # 僵尸攻击力
+ZOMBIE_ATTACK = 10  # 僵尸攻击力
+ZOMBIE_NUM = 2
 ITEMS = 10
 
 
@@ -111,7 +112,7 @@ def random_obstacles_and_positions(grid_size, obstacle_count, item_count):
         obstacles[p] = Obstacle(p, "Indestructible")
 
     # 找合法初始位置
-    def pick_two_far_points(min_dist):
+    def pick_positions(min_dist, count):
         empties = [p for p in positions if p not in obstacles]
         while True:
             p1, p2 = random.sample(empties, 2)
@@ -119,7 +120,7 @@ def random_obstacles_and_positions(grid_size, obstacle_count, item_count):
             if dist >= min_dist:
                 return p1, p2
 
-    player_pos, zombie_pos = pick_two_far_points(min_dist=5)
+    player_pos, zombie_pos = pick_positions(min_dist=5, count = ZOMBIE_NUM)
     # 随机生成道具，不能和障碍/起点/终点重叠
     forbidden = set(obstacles) | {player_pos, zombie_pos}
     valid = [p for p in positions if p not in forbidden]
