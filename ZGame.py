@@ -35,6 +35,50 @@ class Graph:
         return self.weights.get((from_node, to_node), float('inf'))
 
 
+# ---------- OO 角色定义 ----------
+class Player:
+    def __init__(self, pos):
+        self.pos = pos
+
+    def move(self, direction, obstacles):
+        x, y = self.pos
+        dx, dy = direction
+        nx, ny = x + dx, y + dy
+        if 0 <= nx < GRID_SIZE and 0 <= ny < GRID_SIZE and (nx, ny) not in obstacles:
+            self.pos = (nx, ny)
+
+
+class Zombie:
+    def __init__(self, pos, attack=ZOMBIE_ATTACK):
+        self.pos = pos
+        self.attack = attack
+        self.breaking_obstacle = None
+
+    def chase(self, target_pos, graph, obstacles):
+        came_from, _ = a_star_search(graph, self.pos, target_pos, obstacles)
+        path = reconstruct_path(came_from, self.pos, target_pos)
+        if len(path) > 1:
+            next_pos = path[1]
+            # 如果下一个位置是可破坏障碍物
+            if next_pos in obstacles and obstacles[next_pos].type == "Destructible":
+                # 攻击障碍
+                obstacles[next_pos].hp -= ZOMBIE_ATTACK
+                # 如果障碍hp <= 0，移除障碍
+                if obstacles[next_pos].hp <= 0:
+                    del obstacles[next_pos]
+                    # 重新构建graph
+                    return "destroy", next_pos
+                else:
+                    return "attack", next_pos
+
+            elif next_pos not in obstacles:
+                self.pos = next_pos
+                self.breaking_obstacle = None
+                return "move", next_pos
+
+        return "idle", self.pos
+
+
 # ---------- 障碍物类 ----------
 class Obstacle:
     def __init__(self, pos, type, hp=None):
@@ -96,7 +140,7 @@ def reconstruct_path(came_from, start, goal):
 
 
 # --------- 随机生成障碍和初始位置及奖励 ---------
-def random_obstacles_and_positions(grid_size, obstacle_count, item_count):
+def random_obstacles_and_positions(grid_size, obstacle_count, item_count, zombie_num):
     positions = [(x, y) for x in range(grid_size) for y in range(grid_size)]
     # 随机选障碍物
     chosen = random.sample(positions, obstacle_count)
@@ -115,61 +159,18 @@ def random_obstacles_and_positions(grid_size, obstacle_count, item_count):
     def pick_positions(min_dist, count):
         empties = [p for p in positions if p not in obstacles]
         while True:
-            p1, p2 = random.sample(empties, 2)
-            dist = abs(p1[0] - p2[0]) + abs(p1[1] - p2[1])
-            if dist >= min_dist:
-                return p1, p2
+            picks = random.sample(empties, count + 1)
+            player_pos = picks[0]
+            zombie_poses = picks[1:]
+            if all(abs(player_pos[0] - z[0]) + abs(player_pos[1] - z[1]) >= min_dist for z in zombie_poses):
+                return player_pos, zombie_poses
 
-    player_pos, zombie_pos = pick_positions(min_dist=5, count = ZOMBIE_NUM)
+    player_pos, zombie_poses = pick_positions(min_dist=5, count=zombie_num)
     # 随机生成道具，不能和障碍/起点/终点重叠
-    forbidden = set(obstacles) | {player_pos, zombie_pos}
+    forbidden = set(obstacles) | {player_pos} | set(zombie_poses)
     valid = [p for p in positions if p not in forbidden]
     items = set(random.sample(valid, item_count))
-    return obstacles, items, player_pos, zombie_pos
-
-
-# ---------- OO 角色定义 ----------
-class Player:
-    def __init__(self, pos):
-        self.pos = pos
-
-    def move(self, direction, obstacles):
-        x, y = self.pos
-        dx, dy = direction
-        nx, ny = x + dx, y + dy
-        if 0 <= nx < GRID_SIZE and 0 <= ny < GRID_SIZE and (nx, ny) not in obstacles:
-            self.pos = (nx, ny)
-
-
-class Zombie:
-    def __init__(self, pos, attack=ZOMBIE_ATTACK):
-        self.pos = pos
-        self.attack = attack
-        self.breaking_obstacle = None
-
-    def chase(self, target_pos, graph, obstacles):
-        came_from, _ = a_star_search(graph, self.pos, target_pos, obstacles)
-        path = reconstruct_path(came_from, self.pos, target_pos)
-        if len(path) > 1:
-            next_pos = path[1]
-            # 如果下一个位置是可破坏障碍物
-            if next_pos in obstacles and obstacles[next_pos].type == "Destructible":
-                # 攻击障碍
-                obstacles[next_pos].hp -= ZOMBIE_ATTACK
-                # 如果障碍hp <= 0，移除障碍
-                if obstacles[next_pos].hp <= 0:
-                    del obstacles[next_pos]
-                    # 重新构建graph
-                    return "destroy", next_pos
-                else:
-                    return "attack", next_pos
-
-            elif next_pos not in obstacles:
-                self.pos = next_pos
-                self.breaking_obstacle = None
-                return "move", next_pos
-
-        return "idle", self.pos
+    return obstacles, items, player_pos, zombie_poses
 
 
 # ----------- 生成格子地图 -----------
@@ -207,9 +208,9 @@ def main():
     clock = pygame.time.Clock()
 
     # 随机生成障碍和起始点及奖励
-    obstacles, items, player_start, zombie_start = random_obstacles_and_positions(GRID_SIZE, OBSTACLES, ITEMS)
+    obstacles, items, player_start, zombie_starts = random_obstacles_and_positions(GRID_SIZE, OBSTACLES, ITEMS, ZOMBIE_NUM)
     player = Player(player_start)
-    zombie = Zombie(zombie_start)
+    zombies = [Zombie(zpos) for zpos in zombie_starts]
     graph = build_graph_with_obstacles(GRID_SIZE, obstacles)
 
     running = True
@@ -243,20 +244,16 @@ def main():
         # 僵尸每5帧A*一次
         zombie_step_counter += 1
         if zombie_step_counter % 5 == 0:
-            action, pos = zombie.chase(player.pos, graph, obstacles)
-
-            # 如果障碍物被破坏，重新构建图
-            if action == "destroy":
-                graph = build_graph_with_obstacles(GRID_SIZE, obstacles)
-            # 如果是移动动作，更新僵尸位置
-            if action == "move":
-                zombie.pos = pos
-
-        # 判断是否Game Over
-        if zombie.pos == player.pos:
-            print("GG! Failure！")
-            game_result = "fail"
-            running = False
+            for zombie in zombies:
+                action, pos = zombie.chase(player.pos, graph, obstacles)
+                if action == "destroy":
+                    graph = build_graph_with_obstacles(GRID_SIZE, obstacles)
+                if action == "move":
+                    zombie.pos = pos
+                if zombie.pos == player.pos:
+                    print("GG! Failure！")
+                    game_result = "fail"
+                    running = False
 
         # 判断胜利
         if not items and game_result is None:
@@ -277,8 +274,10 @@ def main():
                                (ix * CELL_SIZE + CELL_SIZE // 2, iy * CELL_SIZE + CELL_SIZE // 2), CELL_SIZE // 3)
         pygame.draw.rect(screen, (0, 255, 0),
                          (player.pos[0] * CELL_SIZE, player.pos[1] * CELL_SIZE, CELL_SIZE, CELL_SIZE))
-        pygame.draw.rect(screen, (255, 60, 60),
-                         (zombie.pos[0] * CELL_SIZE, zombie.pos[1] * CELL_SIZE, CELL_SIZE, CELL_SIZE))
+        # 绘制所有僵尸
+        for zombie in zombies:
+            pygame.draw.rect(screen, (255, 60, 60),
+                             (zombie.pos[0] * CELL_SIZE, zombie.pos[1] * CELL_SIZE, CELL_SIZE, CELL_SIZE))
         # 画障碍
         for ox, oy in obstacles:
             pygame.draw.rect(screen, (120, 120, 120), (ox * CELL_SIZE, oy * CELL_SIZE, CELL_SIZE, CELL_SIZE))
@@ -292,6 +291,7 @@ def main():
             if obs.type == "Destructible":
                 hp_text = font.render(str(obs.hp), True, (255, 255, 255))
                 screen.blit(hp_text, (obs.pos[0] * CELL_SIZE + 6, obs.pos[1] * CELL_SIZE + 8))
+
         # 路径可视化
         # for p in path[1:]:
         #     pygame.draw.circle(screen, (0, 255, 255),
