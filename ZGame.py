@@ -11,6 +11,8 @@ WINDOW_SIZE = GRID_SIZE * CELL_SIZE
 OBSTACLES = 25
 OBSTACLE_HEALTH = 20  # 可破坏障碍物初始血量
 DESTRUCTIBLE_RATIO = 0.4
+PLAY_SPEED = 2
+ZOMBIE_SPEED = 5
 ZOMBIE_ATTACK = 10  # 僵尸攻击力
 ZOMBIE_NUM = 2
 ITEMS = 10
@@ -37,21 +39,27 @@ class Graph:
 
 # ---------- OO 角色定义 ----------
 class Player:
-    def __init__(self, pos):
+    def __init__(self, pos, speed=PLAY_SPEED):
         self.pos = pos
+        self.speed = speed
+        self.move_cooldown = 0
 
     def move(self, direction, obstacles):
-        x, y = self.pos
-        dx, dy = direction
-        nx, ny = x + dx, y + dy
-        if 0 <= nx < GRID_SIZE and 0 <= ny < GRID_SIZE and (nx, ny) not in obstacles:
-            self.pos = (nx, ny)
+        if self.move_cooldown <= 0:
+            x, y = self.pos
+            dx, dy = direction
+            nx, ny = x + dx, y + dy
+            if 0 <= nx < GRID_SIZE and 0 <= ny < GRID_SIZE and (nx, ny) not in obstacles:
+                self.pos = (nx, ny)
+                self.move_cooldown = self.speed
 
 
 class Zombie:
-    def __init__(self, pos, attack=ZOMBIE_ATTACK):
+    def __init__(self, pos, attack=ZOMBIE_ATTACK, speed=ZOMBIE_SPEED):
         self.pos = pos
         self.attack = attack
+        self.speed = speed
+        self.move_cooldown = random.randint(0, speed-1)  # 让僵尸不完全同步
         self.breaking_obstacle = None
 
     def chase(self, target_pos, graph, obstacles):
@@ -209,8 +217,8 @@ def main():
 
     # 随机生成障碍和起始点及奖励
     obstacles, items, player_start, zombie_starts = random_obstacles_and_positions(GRID_SIZE, OBSTACLES, ITEMS, ZOMBIE_NUM)
-    player = Player(player_start)
-    zombies = [Zombie(zpos) for zpos in zombie_starts]
+    player = Player(player_start, speed=PLAY_SPEED)
+    zombies = [Zombie(z, speed=ZOMBIE_SPEED) for z in zombie_starts]
     graph = build_graph_with_obstacles(GRID_SIZE, obstacles)
 
     running = True
@@ -232,6 +240,8 @@ def main():
             pygame.K_w: (0, -1),
             pygame.K_s: (0, 1),
         }
+        if player.move_cooldown > 0:
+            player.move_cooldown -= 1
         for key, dir in directions.items():
             if keys[key]:
                 player.move(dir, obstacles)
@@ -241,19 +251,21 @@ def main():
         if player.pos in items:
             items.remove(player.pos)
 
-        # 僵尸每5帧A*一次
-        zombie_step_counter += 1
-        if zombie_step_counter % 5 == 0:
-            for zombie in zombies:
-                action, pos = zombie.chase(player.pos, graph, obstacles)
-                if action == "destroy":
-                    graph = build_graph_with_obstacles(GRID_SIZE, obstacles)
-                if action == "move":
-                    zombie.pos = pos
-                if zombie.pos == player.pos:
-                    print("GG! Failure！")
-                    game_result = "fail"
-                    running = False
+        # 僵尸移动
+        for zombie in zombies:
+            if zombie.move_cooldown > 0:
+                zombie.move_cooldown -= 1
+                continue
+            action, pos = zombie.chase(player.pos, graph, obstacles)
+            if action == "destroy":
+                graph = build_graph_with_obstacles(GRID_SIZE, obstacles)
+            if action == "move":
+                zombie.pos = pos
+            zombie.move_cooldown = zombie.speed  # 移动后重置
+            if zombie.pos == player.pos:
+                print("GG! Failure！")
+                game_result = "fail"
+                running = False
 
         # 判断胜利
         if not items and game_result is None:
