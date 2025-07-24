@@ -314,11 +314,15 @@ def main():
         clock.tick(15)
     # 显示结果
     screen.fill((0, 0, 0))
+    font = pygame.font.SysFont(None, 80)
     if game_result == "success":
-        txt = font.render("SUCCESS! All items collected!", True, (0, 255, 0))
-    else:
-        txt = font.render("GAME OVER! Caught by zombie ", True, (255, 60, 60))
-    screen.blit(txt, (40, WINDOW_SIZE // 2 - 30))
+        txt = font.render("CONGREGATION!", True, (0, 255, 0))
+    elif game_result == "fail":
+        txt = font.render("GAME OVER!", True, (255, 60, 60))
+    # else:
+    #     txt = font.render("GAME INTERRUPTED", True, (180, 180, 180))
+    rect = txt.get_rect(center=(WINDOW_SIZE // 2, WINDOW_SIZE // 2))
+    screen.blit(txt, rect)
     pygame.display.flip()
     pygame.time.wait(1500)
     pygame.quit()
