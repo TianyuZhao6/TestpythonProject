@@ -230,6 +230,7 @@ def main():
     while running:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
+                game_result = None
                 running = False
 
         # 玩家移动，不能穿越障碍
@@ -327,7 +328,7 @@ if __name__ == "__main__":
     main()
 
 # TODO
-#  ADDING MULTIPLE TYPE/ NUMBER OF MONSTER AGAINST PLAYER  DONE
-#  Possibly increase player ability/ Balancing the speed of Zombies & Player
+#  ADDING MULTIPLE TYPE/ NUMBER OF / Balancing the speed of Zombies & Player
 #  Adding more interaction with the blocks and other feature on map
-#  Adding multiple chapters after completing single one
+#  Adding multiple chapters afterMONSTER AGAINST PLAYER  DONE
+#  Possibly increase player ability completing single one
