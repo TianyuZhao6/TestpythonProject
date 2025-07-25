@@ -2,8 +2,9 @@ import pygame
 import math
 import random
 from queue import PriorityQueue
+from typing import Dict, List, Set, Tuple, Optional
 
-# ------------- 基础参数 -------------
+# ==================== 游戏常量配置 ====================
 
 GRID_SIZE = 18
 CELL_SIZE = 40
@@ -17,40 +18,91 @@ ZOMBIE_ATTACK = 10  # 僵尸攻击力
 ZOMBIE_NUM = 2
 ITEMS = 10
 
+# 方向向量
+DIRECTIONS = {
+    pygame.K_a: (-1, 0),  # 左
+    pygame.K_d: (1, 0),   # 右
+    pygame.K_w: (0, -1),  # 上
+    pygame.K_s: (0, 1),   # 下
+}
 
-# ------------- A* 图结构 -------------a
+# ==================== 数据结构 ====================
 class Graph:
+    """表示游戏地图的图结构，用于路径查找"""
     def __init__(self):
-        self.edges = {}
-        self.weights = {}
+        self.edges: Dict[Tuple[int, int], List[Tuple[int, int]]] = {}
+        self.weights: Dict[Tuple[Tuple[int, int], Tuple[int, int]], float] = {}
 
-    def add_edge(self, from_node, to_node, weight):
+    def add_edge(self, from_node: Tuple[int, int], to_node: Tuple[int, int], weight: float) -> None:
+        """添加一条边到图中"""
         if from_node not in self.edges:
             self.edges[from_node] = []
         self.edges[from_node].append(to_node)
         self.weights[(from_node, to_node)] = weight
 
-    def neighbors(self, node):
+    def neighbors(self, node: Tuple[int, int]) -> List[Tuple[int, int]]:
+        """获取节点的邻居"""
         return self.edges.get(node, [])
 
-    def cost(self, from_node, to_node):
+    def cost(self, from_node: Tuple[int, int], to_node: Tuple[int, int]) -> float:
+        """获取两个节点之间的移动代价"""
         return self.weights.get((from_node, to_node), float('inf'))
+
+
+class Obstacle:
+    """表示游戏中的障碍物"""
+
+    def __init__(self, pos: Tuple[int, int], obstacle_type: str, health: Optional[int] = None):
+        """
+        初始化障碍物
+
+        Args:
+            pos: 障碍物位置 (x, y)
+            obstacle_type: 障碍物类型 ("Destructible" 或 "Indestructible")
+            health: 可破坏障碍物的生命值 (仅对可破坏障碍物有效)
+        """
+        self.pos: Tuple[int, int] = pos
+        self.type: str = obstacle_type
+        self.health: Optional[int] = health
+
+    def is_destroyed(self) -> bool:
+        """检查障碍物是否已被破坏"""
+        return self.type == "Destructible" and self.health <= 0
 
 
 # ---------- OO 角色定义 ----------
 class Player:
-    def __init__(self, pos, speed=PLAY_SPEED):
-        self.pos = pos
-        self.speed = speed
-        self.move_cooldown = 0
+    """玩家角色"""
 
-    def move(self, direction, obstacles):
+    def __init__(self, pos: Tuple[int, int], speed: int = PLAYER_SPEED):
+        """
+        初始化玩家
+
+        Args:
+            pos: 初始位置 (x, y)
+            speed: 移动速度 (值越大移动越慢)
+        """
+        self.pos: Tuple[int, int] = pos
+        self.speed: int = speed
+        self.move_cooldown: int = 0
+
+    def move(self, direction: Tuple[int, int], obstacles: Dict[Tuple[int, int], Obstacle]) -> None:
+        """在指定方向上移动玩家
+
+        Args:
+            direction: 移动方向 (dx, dy)
+            obstacles: 障碍物字典
+        """
         if self.move_cooldown <= 0:
             x, y = self.pos
             dx, dy = direction
-            nx, ny = x + dx, y + dy
-            if 0 <= nx < GRID_SIZE and 0 <= ny < GRID_SIZE and (nx, ny) not in obstacles:
-                self.pos = (nx, ny)
+            new_x, new_y = x + dx, y + dy
+
+            # 检查新位置是否有效
+            if (0 <= new_x < GRID_SIZE and
+                    0 <= new_y < GRID_SIZE and
+                    (new_x, new_y) not in obstacles):
+                self.pos = (new_x, new_y)
                 self.move_cooldown = self.speed
 
 
