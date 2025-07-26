@@ -98,6 +98,7 @@ Progressive difficulty levels
 Multiplayer cooperative mode
 
 ================DEVELOPING IN PROGRESS====================
+
 License
 This project is licensed under the MIT License - see the LICENSE.md file for details.
 
