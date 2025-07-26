@@ -1,10 +1,11 @@
-Zombie Chase: Lockdown Edition
-https://screenshot.png
+# Zombie Chase: Lockdown Edition
+================DEVELOPING IN PROGRESS====================
+## Overview
 
-Overview
 Zombie Chase: Lockdown Edition is a thrilling strategy-survival game where you must outsmart and outmaneuver relentless zombies in a dynamically changing environment. Collect items to survive, but beware - the final item is locked behind all obstacles! Use the zombies' destructive nature to your advantage as you strategically guide them to clear your path.
 
-Key Features
+## Key Features
+
 Strategic Gameplay: Balance item collection with obstacle destruction
 
 Locked Final Item: The last reward requires clearing all obstacles
@@ -17,8 +18,8 @@ Risk-Reward Mechanics: Every move counts in this high-stakes chase
 
 Dynamic Map Generation: New challenges every playthrough
 
-How to Play
-Objective
+## How to Play
+## Objective
 Collect all items on the map to win. But there's a catch - the final item is locked until you destroy all breakable obstacles!
 
 Controls
@@ -50,16 +51,16 @@ Pygame 2.0+
 
 Quick Start
 bash
-# Clone the repository
+## Clone the repository
 git clone https://github.com/yourusername/zombie-chase.git
 
-# Navigate to project directory
+## Navigate to project directory
 cd zombie-chase
 
-# Install dependencies
+## Install dependencies
 pip install pygame
 
-# Run the game
+## Run the game
 python ZGame.py
 Game Strategies
 Bait and Switch: Lure zombies to obstacles you need destroyed
@@ -74,7 +75,7 @@ Customization
 Easily modify game parameters in the code:
 
 python
-# Game settings
+## Game settings
 GRID_SIZE = 18               # Size of game grid
 CELL_SIZE = 40               # Pixel size of each cell
 OBSTACLES_COUNT = 25         # Number of obstacles
@@ -96,6 +97,7 @@ Progressive difficulty levels
 
 Multiplayer cooperative mode
 
+================DEVELOPING IN PROGRESS====================
 License
 This project is licensed under the MIT License - see the LICENSE.md file for details.
 
