@@ -500,3 +500,12 @@ if __name__ == "__main__":
 #  Adding more interaction with the blocks and other feature on map
 #  Adding multiple chapters afterMONSTER AGAINST PLAYER  DONE
 #  Possibly increase player ability completing single one
+#  新怪物/AI
+#  更多交互/可破坏物体
+#  动画、特效、音效
+#  章节/剧情/成就系统
+#  UI按钮、菜单、地图选择等
+#  Actually you know what I got I better idea about this game, Zombie and Obstacle,
+#  We can make it have a much deeper connection with player, add them into the goal of the game
+
+
