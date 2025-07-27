@@ -396,10 +396,21 @@ def render_game(screen: pygame.Surface, obstacles: Dict[Tuple[int, int], Obstacl
             rect = pygame.Rect(x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE)
             pygame.draw.rect(screen, (50, 50, 50), rect, 1)
 
-    # 绘制道具
-    for item_x, item_y in items:
-        center = (item_x * CELL_SIZE + CELL_SIZE // 2, item_y * CELL_SIZE + CELL_SIZE // 2)
-        pygame.draw.circle(screen, (255, 255, 0), center, CELL_SIZE // 3)
+        # 绘制道具
+    for item_pos in game_state.items:
+        color = LOCKED_ITEM_COLOR if item_pos == game_state.locked_item and not game_state.unlocked else (255, 255, 0)
+        center = (item_pos[0] * CELL_SIZE + CELL_SIZE // 2, item_pos[1] * CELL_SIZE + CELL_SIZE // 2)
+        pygame.draw.circle(screen, color, center, CELL_SIZE // 3)
+
+        # 如果是锁定的道具，画一个锁的图标
+        if item_pos == game_state.locked_item and not game_state.unlocked:
+            lock_rect = pygame.Rect(
+                item_pos[0] * CELL_SIZE + CELL_SIZE // 4,
+                item_pos[1] * CELL_SIZE + CELL_SIZE // 4,
+                CELL_SIZE // 2,
+                CELL_SIZE // 2
+            )
+            pygame.draw.rect(screen, (30, 30, 30), lock_rect, 2)
 
     # 绘制玩家
     player_rect = pygame.Rect(
@@ -471,6 +482,9 @@ def main() -> None:
         zombie_count=ZOMBIE_NUM
     )
 
+    # 创建游戏状态管理器
+    game_state = GameState(obstacles, items, locked_item)
+
     # 创建玩家和僵尸
     player = Player(player_start, speed=PLAYER_SPEED)
     zombies = [Zombie(pos, speed=ZOMBIE_SPEED) for pos in zombie_starts]
@@ -493,6 +507,7 @@ def main() -> None:
         if player.move_cooldown > 0:
             player.move_cooldown -= 1
 
+
         keys = pygame.key.get_pressed()
         for key, direction in DIRECTIONS.items():
             if keys[key]:
@@ -502,6 +517,14 @@ def main() -> None:
         # 检查玩家是否拾取道具
         if player.pos in items:
             items.remove(player.pos)
+            # 检查玩家是否拾取道具
+            if player.pos in game_state.items:
+                if game_state.collect_item(player.pos):
+                    # 播放收集音效
+                    pass
+                else:
+                    # 播放无法收集的音效
+                    pass
 
         # 僵尸行为
         for zombie in zombies:
@@ -513,7 +536,10 @@ def main() -> None:
 
             # 处理障碍物被破坏的情况
             if action == "destroy":
-                graph = build_graph(GRID_SIZE, obstacles)
+                # 更新游戏状态
+                game_state.destroy_obstacle(target_pos)
+                # 重建图
+                graph = build_graph(GRID_SIZE, game_state.obstacles)
 
             # 处理僵尸移动
             if action == "move":
@@ -533,6 +559,17 @@ def main() -> None:
 
         # 渲染游戏
         render_game(screen, obstacles, items, player, zombies)
+        # 显示剩余障碍物和物品计数
+        font = pygame.font.SysFont(None, 24)
+        obstacles_text = font.render(f"障碍物: {game_state.destructible_count}", True, (200, 80, 80))
+        items_text = font.render(f"物品: {len(game_state.items)}", True, (255, 255, 0))
+        screen.blit(obstacles_text, (10, 10))
+        screen.blit(items_text, (10, 40))
+
+        # 如果锁定物品未解锁，显示提示
+        if game_state.locked_item in game_state.items and not game_state.unlocked:
+            hint_text = font.render("破坏所有障碍物解锁最终物品", True, (100, 200, 255))
+            screen.blit(hint_text, (WINDOW_SIZE // 2 - 150, 10))
         pygame.display.flip()
         clock.tick(15)
 
