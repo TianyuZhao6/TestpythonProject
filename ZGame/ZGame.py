@@ -584,7 +584,7 @@ if __name__ == "__main__":
     main()
 
 # TODO
-#  IMPROVE THE UI AND HINT 
+#  IMPROVE THE UI AND HINT  BUGS ABOUT LOCKED ITEM CANNOT SUCCESS
 #  ADDING MULTIPLE TYPE/ NUMBER OF / Balancing the speed of Zombies & Player
 #  Adding more interaction with the blocks and other feature on map
 #  Adding multiple chapters afterMONSTER AGAINST PLAYER  DONE
