@@ -584,6 +584,7 @@ if __name__ == "__main__":
     main()
 
 # TODO
+#  IMPROVE THE UI AND HINT 
 #  ADDING MULTIPLE TYPE/ NUMBER OF / Balancing the speed of Zombies & Player
 #  Adding more interaction with the blocks and other feature on map
 #  Adding multiple chapters afterMONSTER AGAINST PLAYER  DONE
