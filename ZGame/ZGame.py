@@ -514,8 +514,8 @@ def main() -> None:
                 break
 
         # 检查玩家是否拾取道具
-        if player.pos in items:
-            items.remove(player.pos)
+        if player.pos in game_state.items:
+            # items.remove(player.pos)
             # 检查玩家是否拾取道具
             if player.pos in game_state.items:
                 if game_state.collect_item(player.pos):
@@ -552,7 +552,7 @@ def main() -> None:
                 game_running = False
 
         # 检查胜利条件（收集所有道具）
-        if not items and game_result is None:
+        if not game_state.items and game_result is None:
             game_result = "success"
             game_running = False
 
@@ -560,14 +560,14 @@ def main() -> None:
         render_game(screen, game_state, player, zombies)
         # 显示剩余障碍物和物品计数
         font = pygame.font.SysFont(None, 24)
-        obstacles_text = font.render(f"障碍物: {game_state.destructible_count}", True, (200, 80, 80))
-        items_text = font.render(f"物品: {len(game_state.items)}", True, (255, 255, 0))
+        obstacles_text = font.render(f"BLOCKS: {game_state.destructible_count}", True, (200, 80, 80))
+        items_text = font.render(f"ITEMS: {len(game_state.items)}", True, (255, 255, 0))
         screen.blit(obstacles_text, (10, 10))
         screen.blit(items_text, (10, 40))
 
         # 如果锁定物品未解锁，显示提示
         if game_state.locked_item in game_state.items and not game_state.unlocked:
-            hint_text = font.render("破坏所有障碍物解锁最终物品", True, (100, 200, 255))
+            hint_text = font.render("BREAK ALL THE BLOCKS TO UNLOCK THE LAST ITEM!", True, (100, 200, 255))
             screen.blit(hint_text, (WINDOW_SIZE // 2 - 150, 10))
         pygame.display.flip()
         clock.tick(15)
