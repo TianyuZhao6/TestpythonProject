@@ -11,7 +11,7 @@ CELL_SIZE = 40
 WINDOW_SIZE = GRID_SIZE * CELL_SIZE
 OBSTACLES = 25
 OBSTACLE_HEALTH = 20  # 可破坏障碍物初始血量
-DESTRUCTIBLE_RATIO = 0.4
+DESTRUCTIBLE_RATIO = 0.3
 PLAYER_SPEED = 2
 ZOMBIE_SPEED = 5
 ZOMBIE_ATTACK = 10  # 僵尸攻击力
@@ -347,6 +347,7 @@ class GameState:
         self.locked_item = locked_item
         self.unlocked = False  # 锁定物品是否已解锁
         self.destructible_count = self.count_destructible_obstacles()
+        # self.destroy_goal = destroy_goal  # 需破坏的总数（可破坏障碍总数）
 
     def count_destructible_obstacles(self) -> int:
         """计算可破坏障碍物的数量"""
@@ -584,7 +585,7 @@ if __name__ == "__main__":
     main()
 
 # TODO
-#  IMPROVE THE UI AND HINT  BUGS ABOUT LOCKED ITEM CANNOT SUCCESS
+#  IMPROVE THE UI AND HINT  BUGS ABOUT LOCKED ITEM CANNOT SUCCESS/ block arrangement
 #  ADDING MULTIPLE TYPE/ NUMBER OF / Balancing the speed of Zombies & Player
 #  Adding more interaction with the blocks and other feature on map
 #  Adding multiple chapters afterMONSTER AGAINST PLAYER  DONE
@@ -595,3 +596,6 @@ if __name__ == "__main__":
 #  UI按钮、菜单、地图选择等
 #  Actually you know what I got I better idea about this game, Zombie and Obstacle,
 #  We can make it have a much deeper connection with player, add them into the goal of the game
+#  Revision: put the last item in the centre of walls surrounding, do not use the lock thing
+#  , it has nothing to do directly with the game set
+#  Add a potion to control zombie possess the body
