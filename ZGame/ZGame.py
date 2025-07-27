@@ -17,6 +17,8 @@ ZOMBIE_SPEED = 5
 ZOMBIE_ATTACK = 10  # 僵尸攻击力
 ZOMBIE_NUM = 2
 ITEMS = 10
+LOCKED_ITEM_COLOR = (0, 100, 255)  # 锁定的特殊物品颜色
+UNLOCKED_ITEM_COLOR = (255, 200, 0)  # 解锁后的颜色
 
 # 方向向量
 DIRECTIONS = {
