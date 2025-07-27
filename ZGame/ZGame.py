@@ -381,11 +381,11 @@ class GameState:
         # 每次破坏后检查是否满足解锁条件
         self.unlocked = self.check_unlock_condition()
 
+
 # ==================== 游戏渲染函数 ====================
 
 
-def render_game(screen: pygame.Surface, obstacles: Dict[Tuple[int, int], Obstacle],
-                items: Set[Tuple[int, int]], player: Player, zombies: List[Zombie]) -> None:
+def render_game(screen: pygame.Surface, game_state, player: Player, zombies: List[Zombie]) -> None:
     """渲染游戏画面"""
     # 清空屏幕
     screen.fill((20, 20, 20))
@@ -396,7 +396,7 @@ def render_game(screen: pygame.Surface, obstacles: Dict[Tuple[int, int], Obstacl
             rect = pygame.Rect(x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE)
             pygame.draw.rect(screen, (50, 50, 50), rect, 1)
 
-        # 绘制道具
+    # 绘制道具
     for item_pos in game_state.items:
         color = LOCKED_ITEM_COLOR if item_pos == game_state.locked_item and not game_state.unlocked else (255, 255, 0)
         center = (item_pos[0] * CELL_SIZE + CELL_SIZE // 2, item_pos[1] * CELL_SIZE + CELL_SIZE // 2)
@@ -432,7 +432,7 @@ def render_game(screen: pygame.Surface, obstacles: Dict[Tuple[int, int], Obstacl
         pygame.draw.rect(screen, (255, 60, 60), zombie_rect)
 
     # 绘制障碍物
-    for obstacle in obstacles.values():
+    for obstacle in game_state.obstacles.values():
         color = (200, 80, 80) if obstacle.type == "Destructible" else (120, 120, 120)
         obstacle_rect = pygame.Rect(
             obstacle.pos[0] * CELL_SIZE,
@@ -475,7 +475,7 @@ def main() -> None:
     clock = pygame.time.Clock()
 
     # 生成游戏实体
-    obstacles, items, player_start, zombie_starts = generate_game_entities(
+    obstacles, items, player_start, zombie_starts, locked_item = generate_game_entities(
         grid_size=GRID_SIZE,
         obstacle_count=OBSTACLES,
         item_count=ITEMS,
@@ -506,7 +506,6 @@ def main() -> None:
         # 玩家移动
         if player.move_cooldown > 0:
             player.move_cooldown -= 1
-
 
         keys = pygame.key.get_pressed()
         for key, direction in DIRECTIONS.items():
@@ -558,7 +557,7 @@ def main() -> None:
             game_running = False
 
         # 渲染游戏
-        render_game(screen, obstacles, items, player, zombies)
+        render_game(screen, game_state, player, zombies)
         # 显示剩余障碍物和物品计数
         font = pygame.font.SysFont(None, 24)
         obstacles_text = font.render(f"障碍物: {game_state.destructible_count}", True, (200, 80, 80))
@@ -595,5 +594,3 @@ if __name__ == "__main__":
 #  UI按钮、菜单、地图选择等
 #  Actually you know what I got I better idea about this game, Zombie and Obstacle,
 #  We can make it have a much deeper connection with player, add them into the goal of the game
-
-
