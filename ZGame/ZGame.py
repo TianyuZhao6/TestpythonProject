@@ -252,7 +252,7 @@ def generate_game_entities(grid_size: int, obstacle_count: int, item_count: int,
     生成游戏实体（障碍物、道具、玩家和僵尸位置）
 
     Returns:
-        (障碍物字典, 道具集合, 玩家位置, 僵尸位置列表)
+         (障碍物字典, 道具集合, 玩家位置, 僵尸位置列表, 锁定物品位置)
     """
     # 所有可能的网格位置
     all_positions = [(x, y) for x in range(grid_size) for y in range(grid_size)]
@@ -293,7 +293,10 @@ def generate_game_entities(grid_size: int, obstacle_count: int, item_count: int,
     valid_positions = [p for p in all_positions if p not in forbidden_positions]
     items = set(random.sample(valid_positions, item_count))
 
-    return obstacles, items, player_position, zombie_positions
+    # 随机选择一个道具作为锁定道具
+    locked_item = random.choice(list(items))
+
+    return obstacles, items, player_position, zombie_positions, locked_item
 
 
 # ----------- 生成格子地图 -----------
@@ -333,7 +336,54 @@ def build_graph(grid_size: int, obstacles: Dict[Tuple[int, int], Obstacle]) -> G
 
     return graph
 
+
+# ==================== 新增游戏状态类 ====================
+class GameState:
+    """管理游戏状态和进度"""
+
+    def __init__(self, obstacles: Dict, items: Set, locked_item: Tuple[int, int]):
+        self.obstacles = obstacles
+        self.items = items
+        self.locked_item = locked_item
+        self.unlocked = False  # 锁定物品是否已解锁
+        self.destructible_count = self.count_destructible_obstacles()
+
+    def count_destructible_obstacles(self) -> int:
+        """计算可破坏障碍物的数量"""
+        return sum(1 for obs in self.obstacles.values() if obs.type == "Destructible")
+
+    def check_unlock_condition(self) -> bool:
+        """检查是否满足解锁条件"""
+        # 条件1: 所有其他物品已被收集
+        # 条件2: 所有可破坏障碍物已被破坏
+        return len(self.items) == 1 and self.destructible_count == 0
+
+    def collect_item(self, pos: Tuple[int, int]) -> bool:
+        """收集物品，如果是锁定物品且未解锁则无法收集"""
+        if pos not in self.items:
+            return False
+
+        # 如果是锁定物品且未解锁，不能收集
+        if pos == self.locked_item and not self.unlocked:
+            return False
+
+        self.items.remove(pos)
+        return True
+
+    def destroy_obstacle(self, pos: Tuple[int, int]):
+        """破坏障碍物并更新计数"""
+        if pos in self.obstacles:
+            # 如果是可破坏障碍物，更新计数
+            if self.obstacles[pos].type == "Destructible":
+                self.destructible_count -= 1
+            del self.obstacles[pos]
+
+        # 每次破坏后检查是否满足解锁条件
+        self.unlocked = self.check_unlock_condition()
+
 # ==================== 游戏渲染函数 ====================
+
+
 def render_game(screen: pygame.Surface, obstacles: Dict[Tuple[int, int], Obstacle],
                 items: Set[Tuple[int, int]], player: Player, zombies: List[Zombie]) -> None:
     """渲染游戏画面"""
