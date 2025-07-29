@@ -17,8 +17,8 @@ ZOMBIE_SPEED = 5
 ZOMBIE_ATTACK = 10  # 僵尸攻击力
 ZOMBIE_NUM = 2
 ITEMS = 10
-LOCKED_ITEM_COLOR = (0, 100, 255)  # 锁定的特殊物品颜色
-UNLOCKED_ITEM_COLOR = (255, 200, 0)  # 解锁后的颜色
+# LOCKED_ITEM_COLOR = (0, 100, 255)  # 锁定的特殊物品颜色
+# UNLOCKED_ITEM_COLOR = (255, 200, 0)  # 解锁后的颜色
 
 # 方向向量
 DIRECTIONS = {
@@ -294,9 +294,9 @@ def generate_game_entities(grid_size: int, obstacle_count: int, item_count: int,
     items = set(random.sample(valid_positions, item_count))
 
     # 随机选择一个道具作为锁定道具
-    locked_item = random.choice(list(items))
+    # locked_item = random.choice(list(items))
 
-    return obstacles, items, player_position, zombie_positions, locked_item
+    return obstacles, items, player_position, zombie_positions
 
 
 # ----------- 生成格子地图 -----------
@@ -341,11 +341,11 @@ def build_graph(grid_size: int, obstacles: Dict[Tuple[int, int], Obstacle]) -> G
 class GameState:
     """管理游戏状态和进度"""
 
-    def __init__(self, obstacles: Dict, items: Set, locked_item: Tuple[int, int]):
+    def __init__(self, obstacles: Dict, items: Set):
         self.obstacles = obstacles
         self.items = items
-        self.locked_item = locked_item
-        self.unlocked = False  # 锁定物品是否已解锁
+        # self.locked_item = locked_item
+        # self.unlocked = False  # 锁定物品是否已解锁
         self.destructible_count = self.count_destructible_obstacles()
         # self.destroy_goal = destroy_goal  # 需破坏的总数（可破坏障碍总数）
 
@@ -353,11 +353,11 @@ class GameState:
         """计算可破坏障碍物的数量"""
         return sum(1 for obs in self.obstacles.values() if obs.type == "Destructible")
 
-    def check_unlock_condition(self) -> bool:
-        """检查是否满足解锁条件"""
-        # 条件1: 所有其他物品已被收集
-        # 条件2: 所有可破坏障碍物已被破坏
-        return len(self.items) == 1 and self.destructible_count == 0
+    # def check_unlock_condition(self) -> bool:
+    #     """检查是否满足解锁条件"""
+    #     # 条件1: 所有其他物品已被收集
+    #     # 条件2: 所有可破坏障碍物已被破坏
+    #     return len(self.items) == 1 and self.destructible_count == 0
 
     def collect_item(self, pos: Tuple[int, int]) -> bool:
         """收集物品，如果是锁定物品且未解锁则无法收集"""
@@ -365,8 +365,8 @@ class GameState:
             return False
 
         # 如果是锁定物品且未解锁，不能收集
-        if pos == self.locked_item and not self.unlocked:
-            return False
+        # if pos == self.locked_item and not self.unlocked:
+        #     return False
 
         self.items.remove(pos)
         return True
@@ -379,8 +379,8 @@ class GameState:
                 self.destructible_count -= 1
             del self.obstacles[pos]
 
-        # 每次破坏后检查是否满足解锁条件
-        self.unlocked = self.check_unlock_condition()
+        # # 每次破坏后检查是否满足解锁条件
+        # self.unlocked = self.check_unlock_condition()
 
 
 # ==================== 游戏渲染函数 ====================
@@ -399,19 +399,19 @@ def render_game(screen: pygame.Surface, game_state, player: Player, zombies: Lis
 
     # 绘制道具
     for item_pos in game_state.items:
-        color = LOCKED_ITEM_COLOR if item_pos == game_state.locked_item and not game_state.unlocked else (255, 255, 0)
+        # color = LOCKED_ITEM_COLOR if item_pos == game_state.locked_item and not game_state.unlocked else (255, 255, 0)
         center = (item_pos[0] * CELL_SIZE + CELL_SIZE // 2, item_pos[1] * CELL_SIZE + CELL_SIZE // 2)
-        pygame.draw.circle(screen, color, center, CELL_SIZE // 3)
+        # pygame.draw.circle(screen, color, center, CELL_SIZE // 3)
 
         # 如果是锁定的道具，画一个锁的图标
-        if item_pos == game_state.locked_item and not game_state.unlocked:
-            lock_rect = pygame.Rect(
-                item_pos[0] * CELL_SIZE + CELL_SIZE // 4,
-                item_pos[1] * CELL_SIZE + CELL_SIZE // 4,
-                CELL_SIZE // 2,
-                CELL_SIZE // 2
-            )
-            pygame.draw.rect(screen, (30, 30, 30), lock_rect, 2)
+        # if item_pos == game_state.locked_item and not game_state.unlocked:
+        #     lock_rect = pygame.Rect(
+        #         item_pos[0] * CELL_SIZE + CELL_SIZE // 4,
+        #         item_pos[1] * CELL_SIZE + CELL_SIZE // 4,
+        #         CELL_SIZE // 2,
+        #         CELL_SIZE // 2
+        #     )
+        #     pygame.draw.rect(screen, (30, 30, 30), lock_rect, 2)
 
     # 绘制玩家
     player_rect = pygame.Rect(
@@ -476,7 +476,7 @@ def main() -> None:
     clock = pygame.time.Clock()
 
     # 生成游戏实体
-    obstacles, items, player_start, zombie_starts, locked_item = generate_game_entities(
+    obstacles, items, player_start, zombie_starts = generate_game_entities(
         grid_size=GRID_SIZE,
         obstacle_count=OBSTACLES,
         item_count=ITEMS,
@@ -484,7 +484,7 @@ def main() -> None:
     )
 
     # 创建游戏状态管理器
-    game_state = GameState(obstacles, items, locked_item)
+    game_state = GameState(obstacles, items)
 
     # 创建玩家和僵尸
     player = Player(player_start, speed=PLAYER_SPEED)
@@ -566,10 +566,10 @@ def main() -> None:
         screen.blit(obstacles_text, (10, 10))
         screen.blit(items_text, (10, 40))
 
-        # 如果锁定物品未解锁，显示提示
-        if game_state.locked_item in game_state.items and not game_state.unlocked:
-            hint_text = font.render("BREAK ALL THE BLOCKS TO UNLOCK THE LAST ITEM!", True, (100, 200, 255))
-            screen.blit(hint_text, (WINDOW_SIZE // 2 - 150, 10))
+        # # 如果锁定物品未解锁，显示提示
+        # if game_state.locked_item in game_state.items and not game_state.unlocked:
+        #     hint_text = font.render("BREAK ALL THE BLOCKS TO UNLOCK THE LAST ITEM!", True, (100, 200, 255))
+        #     screen.blit(hint_text, (WINDOW_SIZE // 2 - 150, 10))
         pygame.display.flip()
         clock.tick(15)
 
