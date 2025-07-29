@@ -602,3 +602,4 @@ if __name__ == "__main__":
 
 
 # Had to remove all the locked item to change to another style which is more reasonable for Gaming
+# And btw still figuring the UI
