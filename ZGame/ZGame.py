@@ -76,7 +76,7 @@ class Obstacle:
 
 
 class MainBlock(Obstacle):
-    def __init__(self, pos: Tuple[int, int], obstacle_type: str, health: Optional[int] = MAIN_BLOCK_HEALTH):
+    def __init__(self, pos: Tuple[int, int], health: Optional[int] = MAIN_BLOCK_HEALTH):
         super().__init__(pos, "Destructible", health)
         self.is_main_block = True
 
@@ -237,6 +237,11 @@ def a_star_search(graph: Graph, start: Tuple[int, int], goal: Tuple[int, int],
     return came_from, cost_so_far
 
 
+def is_not_edge(pos, grid_size):
+    x, y = pos
+    return 1 <= x < grid_size - 1 and 1 <= y < grid_size - 1
+
+
 def reconstruct_path(came_from: Dict, start: Tuple[int, int], goal: Tuple[int, int]) -> List[Tuple[int, int]]:
     """根据A*算法的结果重建路径"""
     if goal not in came_from:
@@ -261,49 +266,53 @@ def generate_game_entities(grid_size: int, obstacle_count: int, item_count: int,
     Returns:
          (障碍物字典, 道具集合, 玩家位置, 僵尸位置列表, 锁定物品位置)
     """
-    # 所有可能的网格位置
     all_positions = [(x, y) for x in range(grid_size) for y in range(grid_size)]
+    corners = [(0, 0), (0, grid_size - 1), (grid_size - 1, 0), (grid_size - 1, grid_size - 1)]
 
-    # 随机选择障碍物位置
-    chosen_obstacles = random.sample(all_positions, obstacle_count)
-    destructible_count = int(obstacle_count * DESTRUCTIBLE_RATIO)
-    obstacles = {}
+    # 玩家、僵尸初始点不能在角落
+    forbidden = set(corners)
 
-    # 创建可破坏障碍物
-    for pos in chosen_obstacles[:destructible_count]:
-        obstacles[pos] = Obstacle(pos, "Destructible", health=OBSTACLE_HEALTH)
-
-    # 创建不可破坏障碍物
-    for pos in chosen_obstacles[destructible_count:]:
-        obstacles[pos] = Obstacle(pos, "Indestructible")
-
-    def pick_valid_positions(min_distance: int, count: int) -> Tuple[Tuple[int, int], List[Tuple[int, int]]]:
-        """选择有效位置，确保玩家和僵尸有足够距离"""
-        empty_positions = [p for p in all_positions if p not in obstacles]
-
+    def pick_valid_positions(min_distance: int, count: int):
+        empty = [p for p in all_positions if p not in forbidden]
         while True:
-            # 随机选择玩家和僵尸位置
-            selected = random.sample(empty_positions, count + 1)
-            player_position = selected[0]
-            zombie_positions = selected[1:]
+            picks = random.sample(empty, count + 1)
+            player_pos, zombies = picks[0], picks[1:]
+            if all(abs(player_pos[0] - z[0]) + abs(player_pos[1] - z[1]) >= min_distance for z in zombies):
+                return player_pos, zombies
 
-            # 检查玩家与所有僵尸的距离
-            if all(abs(player_position[0] - z[0]) + abs(player_position[1] - z[1]) >= min_distance
-                   for z in zombie_positions):
-                return player_position, zombie_positions
+    player_pos, zombie_pos_list = pick_valid_positions(min_distance=5, count=zombie_count)
+    forbidden |= {player_pos}
+    forbidden |= set(zombie_pos_list)
 
-    # 选择玩家和僵尸位置
-    player_position, zombie_positions = pick_valid_positions(min_distance=5, count=zombie_count)
+    # 主道具点（不在 forbidden）
+    main_item_candidates = [p for p in all_positions if p not in forbidden and is_not_edge(p, grid_size)]
+    main_item_pos = random.choice(main_item_candidates)
+    forbidden.add(main_item_pos)
 
-    # 生成道具位置
-    forbidden_positions = set(obstacles.keys()) | {player_position} | set(zombie_positions)
-    valid_positions = [p for p in all_positions if p not in forbidden_positions]
-    items = set(random.sample(valid_positions, item_count))
+    # 主障碍（MainBlock）
+    obstacles = {main_item_pos: MainBlock(main_item_pos, health=MAIN_BLOCK_HEALTH)}
 
-    # 随机选择一个道具作为锁定道具
-    # locked_item = random.choice(list(items))
+    rest_obstacle_candidates = [p for p in all_positions if p not in forbidden]
+    rest_count = obstacle_count - 1
+    rest_obstacle_positions = random.sample(rest_obstacle_candidates, rest_count)
+    destructible_count = int(rest_count * DESTRUCTIBLE_RATIO)
+    indestructible_count = rest_count - destructible_count
 
-    return obstacles, items, player_position, zombie_positions
+    # 可破坏障碍
+    for pos in rest_obstacle_positions[:destructible_count]:
+        obstacles[pos] = Obstacle(pos, "Destructible", health=OBSTACLE_HEALTH)
+    # 不可破坏障碍
+    for pos in rest_obstacle_positions[destructible_count:]:
+        obstacles[pos] = Obstacle(pos, "Indestructible")
+    forbidden |= set(obstacles.keys())
+
+    # 其它道具
+    item_candidates = [p for p in all_positions if p not in forbidden]
+    other_items = random.sample(item_candidates, item_count - 1)
+    items = set(other_items)
+    items.add(main_item_pos)  # 主道具
+
+    return obstacles, items, player_pos, zombie_pos_list, [main_item_pos]  # main_item_pos可为列表支持多关卡
 
 
 # ----------- 生成格子地图 -----------
@@ -348,13 +357,11 @@ def build_graph(grid_size: int, obstacles: Dict[Tuple[int, int], Obstacle]) -> G
 class GameState:
     """管理游戏状态和进度"""
 
-    def __init__(self, obstacles: Dict, items: Set):
+    def __init__(self, obstacles: Dict, items: Set, main_item_pos: List[Tuple[int, int]]):
         self.obstacles = obstacles
         self.items = items
-        # self.locked_item = locked_item
-        # self.unlocked = False  # 锁定物品是否已解锁
         self.destructible_count = self.count_destructible_obstacles()
-        # self.destroy_goal = destroy_goal  # 需破坏的总数（可破坏障碍总数）
+        self.main_item_pos = main_item_pos
 
     def count_destructible_obstacles(self) -> int:
         """计算可破坏障碍物的数量"""
@@ -367,16 +374,14 @@ class GameState:
     #     return len(self.items) == 1 and self.destructible_count == 0
 
     def collect_item(self, pos: Tuple[int, int]) -> bool:
-        """收集物品，如果是锁定物品且未解锁则无法收集"""
-        if pos not in self.items:
+        """收集物品，如果是主物品且未解锁则无法收集"""
+        # 只有主障碍不在时才能收集主道具
+        if pos in self.main_item_pos and pos in self.obstacles:
             return False
-
-        # 如果是锁定物品且未解锁，不能收集
-        # if pos == self.locked_item and not self.unlocked:
-        #     return False
-
-        self.items.remove(pos)
-        return True
+        if pos in self.items:
+            self.items.remove(pos)
+            return True
+        return False
 
     def destroy_obstacle(self, pos: Tuple[int, int]):
         """破坏障碍物并更新计数"""
@@ -406,19 +411,10 @@ def render_game(screen: pygame.Surface, game_state, player: Player, zombies: Lis
 
     # 绘制道具
     for item_pos in game_state.items:
-        # color = LOCKED_ITEM_COLOR if item_pos == game_state.locked_item and not game_state.unlocked else (255, 255, 0)
+        is_main = item_pos in game_state.main_item_pos
+        color = (255, 255, 100) if is_main else (255, 255, 0)
         center = (item_pos[0] * CELL_SIZE + CELL_SIZE // 2, item_pos[1] * CELL_SIZE + CELL_SIZE // 2)
-        # pygame.draw.circle(screen, color, center, CELL_SIZE // 3)
-
-        # 如果是锁定的道具，画一个锁的图标
-        # if item_pos == game_state.locked_item and not game_state.unlocked:
-        #     lock_rect = pygame.Rect(
-        #         item_pos[0] * CELL_SIZE + CELL_SIZE // 4,
-        #         item_pos[1] * CELL_SIZE + CELL_SIZE // 4,
-        #         CELL_SIZE // 2,
-        #         CELL_SIZE // 2
-        #     )
-        #     pygame.draw.rect(screen, (30, 30, 30), lock_rect, 2)
+        pygame.draw.circle(screen, color, center, CELL_SIZE // 3)
 
     # 绘制玩家
     player_rect = pygame.Rect(
@@ -441,20 +437,22 @@ def render_game(screen: pygame.Surface, game_state, player: Player, zombies: Lis
 
     # 绘制障碍物
     for obstacle in game_state.obstacles.values():
-        color = (200, 80, 80) if obstacle.type == "Destructible" else (120, 120, 120)
-        obstacle_rect = pygame.Rect(
-            obstacle.pos[0] * CELL_SIZE,
-            obstacle.pos[1] * CELL_SIZE,
-            CELL_SIZE,
-            CELL_SIZE
-        )
-        pygame.draw.rect(screen, color, obstacle_rect)
-
-        # 显示可破坏障碍物的生命值
+        is_main = hasattr(obstacle, 'is_main_block') and obstacle.is_main_block
+        if is_main:
+            color = (255, 220, 80)  # 主障碍：金黄
+        elif obstacle.type == "Indestructible":
+            color = (120, 120, 120)  # 灰色
+        else:
+            color = (200, 80, 80)  # 可破坏：红
+        pygame.draw.rect(screen, color, pygame.Rect(
+            obstacle.pos[0] * CELL_SIZE, obstacle.pos[1] * CELL_SIZE, CELL_SIZE, CELL_SIZE))
         if obstacle.type == "Destructible":
             font = pygame.font.SysFont(None, 30)
             health_text = font.render(str(obstacle.health), True, (255, 255, 255))
             screen.blit(health_text, (obstacle.pos[0] * CELL_SIZE + 6, obstacle.pos[1] * CELL_SIZE + 8))
+        if is_main:
+            star = pygame.font.SysFont(None, 32).render("★", True, (255, 255, 120))
+            screen.blit(star, (obstacle.pos[0] * CELL_SIZE + 8, obstacle.pos[1] * CELL_SIZE + 8))
 
 
 def render_game_result(screen: pygame.Surface, result: str) -> None:
@@ -483,7 +481,7 @@ def main() -> None:
     clock = pygame.time.Clock()
 
     # 生成游戏实体
-    obstacles, items, player_start, zombie_starts = generate_game_entities(
+    obstacles, items, player_start, zombie_starts, main_item_list = generate_game_entities(
         grid_size=GRID_SIZE,
         obstacle_count=OBSTACLES,
         item_count=ITEMS,
@@ -491,7 +489,7 @@ def main() -> None:
     )
 
     # 创建游戏状态管理器
-    game_state = GameState(obstacles, items)
+    game_state = GameState(obstacles, items, main_item_list)
 
     # 创建玩家和僵尸
     player = Player(player_start, speed=PLAYER_SPEED)
@@ -523,15 +521,10 @@ def main() -> None:
 
         # 检查玩家是否拾取道具
         if player.pos in game_state.items:
-            # items.remove(player.pos)
-            # 检查玩家是否拾取道具
-            # if player.pos in game_state.items:
             if game_state.collect_item(player.pos):
-                # 播放收集音效
-                pass
+                pass  # 收集成功
             else:
-                # 播放无法收集的音效
-                pass
+                pass  # 主道具被主障碍盖住，无法收集
 
         # 僵尸行为
         for zombie in zombies:
