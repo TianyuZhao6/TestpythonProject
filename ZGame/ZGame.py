@@ -15,8 +15,8 @@ OBSTACLES = 25
 OBSTACLE_HEALTH = 20  # 可破坏障碍物初始血量
 MAIN_BLOCK_HEALTH = 40
 DESTRUCTIBLE_RATIO = 0.3
-PLAYER_SPEED = 2
-ZOMBIE_SPEED = 5
+PLAYER_SPEED = 10
+ZOMBIE_SPEED = 20
 ZOMBIE_ATTACK = 10  # 僵尸攻击力
 ZOMBIE_NUM = 2
 ITEMS = 10
@@ -411,6 +411,15 @@ def render_game(screen: pygame.Surface, game_state, player: Player, zombies: Lis
             rect = pygame.Rect(x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE)
             pygame.draw.rect(screen, (50, 50, 50), rect, 1)
 
+    # 顶部信息栏
+    info_bar_height = 50
+    pygame.draw.rect(screen, (28, 28, 40), (0, 0, WINDOW_SIZE, info_bar_height))
+    font_bold = pygame.font.SysFont(None, 28, bold=False)
+    # block_txt = font_bold.render(f"BLOCKS: {game_state.destructible_count}", True, (255, 90, 90))
+    item_txt = font_bold.render(f"ITEMS: {len(game_state.items)}", True, (255, 255, 80))
+    # screen.blit(block_txt, (12, 10))
+    screen.blit(item_txt, (12, 10))
+
     # 绘制道具
     for item_pos in game_state.items:
         is_main = item_pos in game_state.main_item_pos
@@ -466,8 +475,11 @@ def render_game_result(screen: pygame.Surface, result: str) -> None:
         text = font.render("CONGRATULATIONS!", True, (0, 255, 0))
     elif result == "fail":
         text = font.render("GAME OVER!", True, (255, 60, 60))
+    else:
+        # 防止result为None或其它未知值时报错
+        text = font.render("Result Unknown", True, (200, 200, 200))
 
-    text_rect = text.get_rect(center=(WINDOW_SIZE // 2, WINDOW_SIZE // 2))
+    text_rect = text.get_rect(center=(WINDOW_SIZE // 2, WINDOW_SIZE // 2 - 60))
     screen.blit(text, text_rect)
 
     # ▶ 按钮
@@ -477,7 +489,6 @@ def render_game_result(screen: pygame.Surface, result: str) -> None:
     screen.blit(restart_btn, btn_rect)
     pygame.display.flip()
 
-    pygame.display.flip()
     return btn_rect  # 返回按钮区域用于判定鼠标点击
 
     # pygame.time.wait(1500)
@@ -510,16 +521,15 @@ def main() -> None:
     # 构建地图图结构
     graph = build_graph(GRID_SIZE, obstacles)
 
-    # 游戏状态变量
-    game_running = True
-    game_result = None  # "success" or "fail"
-
     # 主游戏循环
-    while game_running:
-        # 处理事件
+    running = True
+    game_result = None
+
+    while running:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
-                game_running = False
+                pygame.quit()
+                sys.exit()
 
         # 玩家移动
         if player.move_cooldown > 0:
@@ -569,46 +579,33 @@ def main() -> None:
             game_result = "success"
             game_running = False
 
-        btn_rect = render_game_result(screen, game_result)
-        waiting_restart = True
-        while waiting_restart:
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    waiting_restart = False
-                    pygame.quit()
-                    sys.exit()
-                if event.type == pygame.MOUSEBUTTONDOWN:
-                    if btn_rect.collidepoint(event.pos):
-                        waiting_restart = False  # 跳出等待，重新main()
-
-        # 渲染游戏
+        # ...游戏内容渲染...
         render_game(screen, game_state, player, zombies)
-        # 显示剩余障碍物和物品计数
-        font = pygame.font.SysFont(None, 24)
-        # obstacles_text = font.render(f"BLOCKS: {game_state.destructible_count}", True, (200, 80, 80))
-        items_text = font.render(f"ITEMS: {len(game_state.items)}", True, (255, 255, 0))
-        # screen.blit(obstacles_text, (10, 10))
-        screen.blit(items_text, (10, 10))
-
         pygame.display.flip()
-        clock.tick(15)
+        clock.tick(60)
 
-    # 显示游戏结果
-    if game_result:
-        render_game_result(screen, game_result)
+        # 胜负判断建议直接 break 出循环，不必设置 game_running/running 双变量
+        if game_result:
+            break
 
-    # 游戏结束后返回 'restart' 或 'exit'
-    return action  # 'restart' or 'exit'
+    # 渲染结算画面+等待点击Restart
+    btn_rect = render_game_result(screen, game_result)
+    while True:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                if btn_rect.collidepoint(event.pos):
+                    return "restart"  # 通知外部循环重新开始
 
 
-while True:
-    result = main()
-    if result != "restart":
-        break
-
+# ==================== 游戏主循环 ====================
 if __name__ == "__main__":
-    main()
-
+    while True:
+        result = main()
+        if result != "restart":
+            break
 # TODO
 #  IMPROVE THE UI AND HINT  BUGS ABOUT LOCKED ITEM CANNOT SUCCESS/ block arrangement
 #  ADDING MULTIPLE TYPE/ NUMBER OF / Balancing the speed of Zombies & Player
