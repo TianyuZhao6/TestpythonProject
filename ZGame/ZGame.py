@@ -1,3 +1,5 @@
+import sys
+
 import pygame
 import math
 import random
@@ -467,8 +469,18 @@ def render_game_result(screen: pygame.Surface, result: str) -> None:
 
     text_rect = text.get_rect(center=(WINDOW_SIZE // 2, WINDOW_SIZE // 2))
     screen.blit(text, text_rect)
+
+    # ▶ 按钮
+    restart_font = pygame.font.SysFont(None, 64, bold=True)
+    restart_btn = restart_font.render("▶ Restart", True, (100, 220, 255))
+    btn_rect = restart_btn.get_rect(center=(WINDOW_SIZE // 2, WINDOW_SIZE // 2 + 40))
+    screen.blit(restart_btn, btn_rect)
     pygame.display.flip()
-    pygame.time.wait(1500)
+
+    pygame.display.flip()
+    return btn_rect  # 返回按钮区域用于判定鼠标点击
+
+    # pygame.time.wait(1500)
 
 
 # ==================== 游戏主循环 ====================
@@ -557,19 +569,27 @@ def main() -> None:
             game_result = "success"
             game_running = False
 
+        btn_rect = render_game_result(screen, game_result)
+        waiting_restart = True
+        while waiting_restart:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    waiting_restart = False
+                    pygame.quit()
+                    sys.exit()
+                if event.type == pygame.MOUSEBUTTONDOWN:
+                    if btn_rect.collidepoint(event.pos):
+                        waiting_restart = False  # 跳出等待，重新main()
+
         # 渲染游戏
         render_game(screen, game_state, player, zombies)
         # 显示剩余障碍物和物品计数
         font = pygame.font.SysFont(None, 24)
-        obstacles_text = font.render(f"BLOCKS: {game_state.destructible_count}", True, (200, 80, 80))
+        # obstacles_text = font.render(f"BLOCKS: {game_state.destructible_count}", True, (200, 80, 80))
         items_text = font.render(f"ITEMS: {len(game_state.items)}", True, (255, 255, 0))
-        screen.blit(obstacles_text, (10, 10))
-        screen.blit(items_text, (10, 40))
+        # screen.blit(obstacles_text, (10, 10))
+        screen.blit(items_text, (10, 10))
 
-        # # 如果锁定物品未解锁，显示提示
-        # if game_state.locked_item in game_state.items and not game_state.unlocked:
-        #     hint_text = font.render("BREAK ALL THE BLOCKS TO UNLOCK THE LAST ITEM!", True, (100, 200, 255))
-        #     screen.blit(hint_text, (WINDOW_SIZE // 2 - 150, 10))
         pygame.display.flip()
         clock.tick(15)
 
@@ -577,9 +597,14 @@ def main() -> None:
     if game_result:
         render_game_result(screen, game_result)
 
-    # 退出游戏
-    pygame.quit()
+    # 游戏结束后返回 'restart' 或 'exit'
+    return action  # 'restart' or 'exit'
 
+
+while True:
+    result = main()
+    if result != "restart":
+        break
 
 if __name__ == "__main__":
     main()
