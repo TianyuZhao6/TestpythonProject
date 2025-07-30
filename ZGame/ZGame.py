@@ -518,13 +518,13 @@ def main() -> None:
         if player.pos in game_state.items:
             # items.remove(player.pos)
             # 检查玩家是否拾取道具
-            if player.pos in game_state.items:
-                if game_state.collect_item(player.pos):
+            # if player.pos in game_state.items:
+            if game_state.collect_item(player.pos):
                     # 播放收集音效
-                    pass
-                else:
+                pass
+            else:
                     # 播放无法收集的音效
-                    pass
+                pass
 
         # 僵尸行为
         for zombie in zombies:
