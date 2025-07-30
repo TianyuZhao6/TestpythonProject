@@ -11,6 +11,7 @@ CELL_SIZE = 40
 WINDOW_SIZE = GRID_SIZE * CELL_SIZE
 OBSTACLES = 25
 OBSTACLE_HEALTH = 20  # 可破坏障碍物初始血量
+MAIN_BLOCK_HEALTH = 40
 DESTRUCTIBLE_RATIO = 0.3
 PLAYER_SPEED = 2
 ZOMBIE_SPEED = 5
@@ -72,6 +73,12 @@ class Obstacle:
     def is_destroyed(self) -> bool:
         """检查障碍物是否已被破坏"""
         return self.type == "Destructible" and self.health <= 0
+
+
+class MainBlock(Obstacle):
+    def __init__(self, pos: Tuple[int, int], obstacle_type: str, health: Optional[int] = MAIN_BLOCK_HEALTH):
+        super().__init__(pos, "Destructible", health)
+        self.is_main_block = True
 
 
 # ---------- OO 角色定义 ----------
@@ -520,10 +527,10 @@ def main() -> None:
             # 检查玩家是否拾取道具
             # if player.pos in game_state.items:
             if game_state.collect_item(player.pos):
-                    # 播放收集音效
+                # 播放收集音效
                 pass
             else:
-                    # 播放无法收集的音效
+                # 播放无法收集的音效
                 pass
 
         # 僵尸行为
