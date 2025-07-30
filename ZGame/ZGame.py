@@ -8,6 +8,7 @@ from typing import Dict, List, Set, Tuple, Optional
 
 # ==================== 游戏常量配置 ====================
 
+INFO_BAR_HEIGHT = 40
 GRID_SIZE = 18
 CELL_SIZE = 40
 WINDOW_SIZE = GRID_SIZE * CELL_SIZE
@@ -15,8 +16,8 @@ OBSTACLES = 25
 OBSTACLE_HEALTH = 20  # 可破坏障碍物初始血量
 MAIN_BLOCK_HEALTH = 40
 DESTRUCTIBLE_RATIO = 0.3
-PLAYER_SPEED = 10
-ZOMBIE_SPEED = 20
+PLAYER_SPEED = 12
+ZOMBIE_SPEED = 24
 ZOMBIE_ATTACK = 10  # 僵尸攻击力
 ZOMBIE_NUM = 2
 ITEMS = 10
@@ -405,32 +406,29 @@ def render_game(screen: pygame.Surface, game_state, player: Player, zombies: Lis
     # 清空屏幕
     screen.fill((20, 20, 20))
 
-    # 绘制网格
-    for x in range(GRID_SIZE):
-        for y in range(GRID_SIZE):
-            rect = pygame.Rect(x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE)
-            pygame.draw.rect(screen, (50, 50, 50), rect, 1)
-
     # 顶部信息栏
-    info_bar_height = 50
-    pygame.draw.rect(screen, (28, 28, 40), (0, 0, WINDOW_SIZE, info_bar_height))
-    font_bold = pygame.font.SysFont(None, 28, bold=False)
-    # block_txt = font_bold.render(f"BLOCKS: {game_state.destructible_count}", True, (255, 90, 90))
-    item_txt = font_bold.render(f"ITEMS: {len(game_state.items)}", True, (255, 255, 80))
-    # screen.blit(block_txt, (12, 10))
-    screen.blit(item_txt, (12, 10))
+    pygame.draw.rect(screen, (28, 28, 40), (0, 0, WINDOW_SIZE, INFO_BAR_HEIGHT))
+    font = pygame.font.SysFont(None, 28)
+    item_txt = font.render(f"ITEMS: {len(game_state.items)}", True, (255, 255, 80))
+    screen.blit(item_txt, (12, 12))
+
+    # 绘制网格
+    for y in range(GRID_SIZE):
+        for x in range(GRID_SIZE):
+            rect = pygame.Rect(x * CELL_SIZE, y * CELL_SIZE + INFO_BAR_HEIGHT, CELL_SIZE, CELL_SIZE)
+            pygame.draw.rect(screen, (50, 50, 50), rect, 1)
 
     # 绘制道具
     for item_pos in game_state.items:
         is_main = item_pos in game_state.main_item_pos
         color = (255, 255, 100) if is_main else (255, 255, 0)
-        center = (item_pos[0] * CELL_SIZE + CELL_SIZE // 2, item_pos[1] * CELL_SIZE + CELL_SIZE // 2)
+        center = (item_pos[0] * CELL_SIZE + CELL_SIZE // 2, item_pos[1] * CELL_SIZE + CELL_SIZE // 2 + INFO_BAR_HEIGHT)
         pygame.draw.circle(screen, color, center, CELL_SIZE // 3)
 
     # 绘制玩家
     player_rect = pygame.Rect(
         player.pos[0] * CELL_SIZE,
-        player.pos[1] * CELL_SIZE,
+        player.pos[1] * CELL_SIZE + INFO_BAR_HEIGHT,
         CELL_SIZE,
         CELL_SIZE
     )
@@ -440,7 +438,7 @@ def render_game(screen: pygame.Surface, game_state, player: Player, zombies: Lis
     for zombie in zombies:
         zombie_rect = pygame.Rect(
             zombie.pos[0] * CELL_SIZE,
-            zombie.pos[1] * CELL_SIZE,
+            zombie.pos[1] * CELL_SIZE + INFO_BAR_HEIGHT,
             CELL_SIZE,
             CELL_SIZE
         )
@@ -456,14 +454,14 @@ def render_game(screen: pygame.Surface, game_state, player: Player, zombies: Lis
         else:
             color = (200, 80, 80)  # 可破坏：红
         pygame.draw.rect(screen, color, pygame.Rect(
-            obstacle.pos[0] * CELL_SIZE, obstacle.pos[1] * CELL_SIZE, CELL_SIZE, CELL_SIZE))
+            obstacle.pos[0] * CELL_SIZE, obstacle.pos[1] * CELL_SIZE + INFO_BAR_HEIGHT, CELL_SIZE, CELL_SIZE))
         if obstacle.type == "Destructible":
             font = pygame.font.SysFont(None, 30)
             health_text = font.render(str(obstacle.health), True, (255, 255, 255))
-            screen.blit(health_text, (obstacle.pos[0] * CELL_SIZE + 6, obstacle.pos[1] * CELL_SIZE + 8))
+            screen.blit(health_text, (obstacle.pos[0] * CELL_SIZE + 6, obstacle.pos[1] * CELL_SIZE + 8 + INFO_BAR_HEIGHT))
         if is_main:
             star = pygame.font.SysFont(None, 32).render("★", True, (255, 255, 120))
-            screen.blit(star, (obstacle.pos[0] * CELL_SIZE + 8, obstacle.pos[1] * CELL_SIZE + 8))
+            screen.blit(star, (obstacle.pos[0] * CELL_SIZE + 8, obstacle.pos[1] * CELL_SIZE + 8 + INFO_BAR_HEIGHT))
 
 
 def render_game_result(screen: pygame.Surface, result: str) -> None:
