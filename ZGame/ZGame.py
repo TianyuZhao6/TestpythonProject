@@ -13,17 +13,17 @@ INFO_BAR_HEIGHT = 40
 GRID_SIZE = 18
 CELL_SIZE = 40
 WINDOW_SIZE = GRID_SIZE * CELL_SIZE
+TOTAL_HEIGHT = WINDOW_SIZE + INFO_BAR_HEIGHT
 OBSTACLES = 25
 OBSTACLE_HEALTH = 20  # 可破坏障碍物初始血量
 MAIN_BLOCK_HEALTH = 40
 DESTRUCTIBLE_RATIO = 0.3
-PLAYER_SPEED = 12
+PLAYER_SPEED = 10
 ZOMBIE_SPEED = 24
 ZOMBIE_ATTACK = 10  # 僵尸攻击力
 ZOMBIE_NUM = 2
 ITEMS = 10
-# LOCKED_ITEM_COLOR = (0, 100, 255)  # 锁定的特殊物品颜色
-# UNLOCKED_ITEM_COLOR = (255, 200, 0)  # 解锁后的颜色
+
 
 # 方向向量
 DIRECTIONS = {
@@ -408,7 +408,7 @@ def render_game(screen: pygame.Surface, game_state, player: Player, zombies: Lis
     screen.fill((20, 20, 20))
 
     # 顶部信息栏
-    pygame.draw.rect(screen, (28, 28, 40), (0, 0, WINDOW_SIZE, INFO_BAR_HEIGHT))
+    pygame.draw.rect(screen, (0, 0, 0), (0, 0, WINDOW_SIZE, INFO_BAR_HEIGHT))
     font = pygame.font.SysFont(None, 28)
     item_txt = font.render(f"ITEMS: {len(game_state.items)}", True, (255, 255, 80))
     screen.blit(item_txt, (12, 12))
@@ -506,7 +506,7 @@ def main() -> None:
     # 初始化pygame
     pygame.init()
     pygame.display.set_caption("Zombie Chase Game")
-    screen = pygame.display.set_mode((WINDOW_SIZE, WINDOW_SIZE))
+    screen = pygame.display.set_mode((WINDOW_SIZE, TOTAL_HEIGHT))
     clock = pygame.time.Clock()
 
     restart_img = pygame.image.load("restart.png").convert_alpha()
