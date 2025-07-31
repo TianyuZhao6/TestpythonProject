@@ -6,6 +6,7 @@ import random
 from queue import PriorityQueue
 from typing import Dict, List, Set, Tuple, Optional
 
+
 # ==================== 游戏常量配置 ====================
 
 INFO_BAR_HEIGHT = 40
@@ -464,7 +465,7 @@ def render_game(screen: pygame.Surface, game_state, player: Player, zombies: Lis
             screen.blit(star, (obstacle.pos[0] * CELL_SIZE + 8, obstacle.pos[1] * CELL_SIZE + 8 + INFO_BAR_HEIGHT))
 
 
-def render_game_result(screen: pygame.Surface, result: str) -> None:
+def render_game_result(screen: pygame.Surface, result: str, restart_img, next_img) -> Tuple[pygame.Rect, pygame.Rect]:
     """渲染游戏结果画面"""
     screen.fill((0, 0, 0))
     font = pygame.font.SysFont(None, 80)
@@ -480,14 +481,21 @@ def render_game_result(screen: pygame.Surface, result: str) -> None:
     text_rect = text.get_rect(center=(WINDOW_SIZE // 2, WINDOW_SIZE // 2 - 60))
     screen.blit(text, text_rect)
 
-    # ▶ 按钮
-    restart_font = pygame.font.SysFont(None, 64, bold=True)
-    restart_btn = restart_font.render("▶ Restart", True, (100, 220, 255))
-    btn_rect = restart_btn.get_rect(center=(WINDOW_SIZE // 2, WINDOW_SIZE // 2 + 40))
-    screen.blit(restart_btn, btn_rect)
+    # ---- 左下角按钮区 ----
+    margin = 40
+    icon_size = 64
+    # Restart图标位置
+    restart_pos = (margin, WINDOW_SIZE - icon_size - margin)
+    restart_rect = pygame.Rect(restart_pos, (icon_size, icon_size))
+    screen.blit(restart_img, restart_rect)
+    # Next图标紧挨右边
+    next_pos = (margin + icon_size + 32, WINDOW_SIZE - icon_size - margin)
+    next_rect = pygame.Rect(next_pos, (icon_size, icon_size))
+    screen.blit(next_img, next_rect)
+
     pygame.display.flip()
 
-    return btn_rect  # 返回按钮区域用于判定鼠标点击
+    return restart_rect, next_rect
 
     # pygame.time.wait(1500)
 
@@ -500,6 +508,12 @@ def main() -> None:
     pygame.display.set_caption("Zombie Chase Game")
     screen = pygame.display.set_mode((WINDOW_SIZE, WINDOW_SIZE))
     clock = pygame.time.Clock()
+
+    restart_img = pygame.image.load("restart.png").convert_alpha()
+    next_img = pygame.image.load("next.png").convert_alpha()
+    icon_size = 64
+    restart_img = pygame.transform.smoothscale(restart_img, (icon_size, icon_size))
+    next_img = pygame.transform.smoothscale(next_img, (icon_size, icon_size))
 
     # 生成游戏实体
     obstacles, items, player_start, zombie_starts, main_item_list = generate_game_entities(
@@ -587,15 +601,17 @@ def main() -> None:
             break
 
     # 渲染结算画面+等待点击Restart
-    btn_rect = render_game_result(screen, game_result)
+    restart_rect, next_rect = render_game_result(screen, game_result,restart_img, next_img)
     while True:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
                 sys.exit()
             if event.type == pygame.MOUSEBUTTONDOWN:
-                if btn_rect.collidepoint(event.pos):
-                    return "restart"  # 通知外部循环重新开始
+                if restart_rect.collidepoint(event.pos):
+                    return "restart"
+                if next_rect.collidepoint(event.pos):
+                    return "next"
 
 
 # ==================== 游戏主循环 ====================
