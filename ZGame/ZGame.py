@@ -471,14 +471,17 @@ def render_game_result(screen: pygame.Surface, result: str, restart_img, next_im
     font = pygame.font.SysFont(None, 80)
 
     if result == "success":
+        # bg_color = (34, 163, 77)
         text = font.render("CONGRATULATIONS!", True, (0, 255, 0))
     elif result == "fail":
+        # bg_color = (70, 18, 32)
         text = font.render("GAME OVER!", True, (255, 60, 60))
     else:
         # 防止result为None或其它未知值时报错
         text = font.render("Result Unknown", True, (200, 200, 200))
 
     text_rect = text.get_rect(center=(WINDOW_SIZE // 2, WINDOW_SIZE // 2 - 60))
+    # screen.fill(bg_color)
     screen.blit(text, text_rect)
 
     # ---- 左下角按钮区 ----
