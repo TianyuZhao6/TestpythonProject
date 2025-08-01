@@ -638,7 +638,7 @@ if __name__ == "__main__":
 #  Revision: put the last item in the centre of walls surrounding, do not use the lock thing
 #  , it has nothing to do directly with the game set
 #  Add a potion to control zombie possess the body
+#  Working on the aviator and main character design and map design today, getting a little inspired
+#  Have basic knowledge about using pixel art
 
-
-# Had to remove all the locked item to change to another style which is more reasonable for Gaming
 # And btw still figuring the UI
