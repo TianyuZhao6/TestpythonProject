@@ -18,8 +18,8 @@ OBSTACLES = 25
 OBSTACLE_HEALTH = 20  # 可破坏障碍物初始血量
 MAIN_BLOCK_HEALTH = 40
 DESTRUCTIBLE_RATIO = 0.3
-PLAYER_SPEED = 10
-ZOMBIE_SPEED = 24
+PLAYER_SPEED = 5
+ZOMBIE_SPEED = 30
 ZOMBIE_ATTACK = 10  # 僵尸攻击力
 ZOMBIE_NUM = 2
 ITEMS = 10
@@ -86,39 +86,88 @@ class MainBlock(Obstacle):
 
 
 # ---------- OO 角色定义 ----------
+# class Player:
+#     """玩家角色"""
+#
+#     def __init__(self, pos: Tuple[int, int], speed: int = PLAYER_SPEED):
+#         """
+#         初始化玩家
+#
+#         Args:
+#             pos: 初始位置 (x, y)
+#             speed: 移动速度 (值越大移动越慢)
+#         """
+#         self.pos: Tuple[int, int] = pos
+#         self.speed: int = speed
+#         self.move_cooldown: int = 0
+#
+#     def move(self, direction: Tuple[int, int], obstacles: Dict[Tuple[int, int], Obstacle]) -> None:
+#         """在指定方向上移动玩家
+#
+#         Args:
+#             direction: 移动方向 (dx, dy)
+#             obstacles: 障碍物字典
+#         """
+#         if self.move_cooldown <= 0:
+#             x, y = self.pos
+#             dx, dy = direction
+#             new_x, new_y = x + dx, y + dy
+#
+#             # 检查新位置是否有效
+#             if (0 <= new_x < GRID_SIZE and
+#                     0 <= new_y < GRID_SIZE and
+#                     (new_x, new_y) not in obstacles):
+#                 self.pos = (new_x, new_y)
+#                 self.move_cooldown = self.speed
+
 class Player:
-    """玩家角色"""
+    """玩家角色（像素自由移动版）"""
 
     def __init__(self, pos: Tuple[int, int], speed: int = PLAYER_SPEED):
         """
-        初始化玩家
-
-        Args:
-            pos: 初始位置 (x, y)
-            speed: 移动速度 (值越大移动越慢)
+        pos: 初始格子 (x, y)
+        speed: 每帧像素速度（整数越大越快）
         """
-        self.pos: Tuple[int, int] = pos
-        self.speed: int = speed
-        self.move_cooldown: int = 0
+        self.x = pos[0] * CELL_SIZE
+        self.y = pos[1] * CELL_SIZE
+        self.speed = speed
+        self.size = CELL_SIZE - 6   # 角色实际占位像素，略小于格子便于走位
 
-    def move(self, direction: Tuple[int, int], obstacles: Dict[Tuple[int, int], Obstacle]) -> None:
-        """在指定方向上移动玩家
+    @property
+    def pos(self):
+        """返回当前所处格子的格子坐标（int）"""
+        return (int((self.x + self.size//2) // CELL_SIZE), int((self.y + self.size//2) // CELL_SIZE))
 
-        Args:
-            direction: 移动方向 (dx, dy)
-            obstacles: 障碍物字典
-        """
-        if self.move_cooldown <= 0:
-            x, y = self.pos
-            dx, dy = direction
-            new_x, new_y = x + dx, y + dy
+    def move(self, keys, obstacles):
+        dx = dy = 0
+        if keys[pygame.K_w]:
+            dy -= 1
+        if keys[pygame.K_s]:
+            dy += 1
+        if keys[pygame.K_a]:
+            dx -= 1
+        if keys[pygame.K_d]:
+            dx += 1
+        # 斜向归一化
+        if dx != 0 and dy != 0:
+            dx *= 0.7071
+            dy *= 0.7071
 
-            # 检查新位置是否有效
-            if (0 <= new_x < GRID_SIZE and
-                    0 <= new_y < GRID_SIZE and
-                    (new_x, new_y) not in obstacles):
-                self.pos = (new_x, new_y)
-                self.move_cooldown = self.speed
+        nx = self.x + dx * self.speed
+        ny = self.y + dy * self.speed
+
+        # 检测“新像素位置”是否进入障碍格
+        grid_x = int((nx + self.size // 2) // CELL_SIZE)
+        grid_y = int((ny + self.size // 2) // CELL_SIZE)
+        if (0 <= grid_x < GRID_SIZE and 0 <= grid_y < GRID_SIZE and
+            (grid_x, grid_y) not in obstacles):
+            self.x = nx
+            self.y = ny
+
+    def draw(self, screen):
+        player_rect = pygame.Rect(int(self.x), int(self.y) + INFO_BAR_HEIGHT, self.size, self.size)
+        pygame.draw.rect(screen, (0, 255, 0), player_rect)
+
 
 
 class Zombie:
@@ -547,14 +596,16 @@ def main() -> None:
                 sys.exit()
 
         # 玩家移动
-        if player.move_cooldown > 0:
-            player.move_cooldown -= 1
-
+        # if player.move_cooldown > 0:
+        #     player.move_cooldown -= 1
+        #
+        # keys = pygame.key.get_pressed()
+        # for key, direction in DIRECTIONS.items():
+        #     if keys[key]:
+        #         player.move(direction, obstacles)
+        #         break
         keys = pygame.key.get_pressed()
-        for key, direction in DIRECTIONS.items():
-            if keys[key]:
-                player.move(direction, obstacles)
-                break
+        player.move(keys, obstacles)
 
         # 检查玩家是否拾取道具
         if player.pos in game_state.items:
