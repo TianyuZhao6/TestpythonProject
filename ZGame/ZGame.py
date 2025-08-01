@@ -6,7 +6,6 @@ import random
 from queue import PriorityQueue
 from typing import Dict, List, Set, Tuple, Optional
 
-
 # ==================== 游戏常量配置 ====================
 
 INFO_BAR_HEIGHT = 40
@@ -23,7 +22,6 @@ ZOMBIE_SPEED = 30
 ZOMBIE_ATTACK = 10  # 僵尸攻击力
 ZOMBIE_NUM = 2
 ITEMS = 10
-
 
 # 方向向量
 DIRECTIONS = {
@@ -131,12 +129,12 @@ class Player:
         self.x = pos[0] * CELL_SIZE
         self.y = pos[1] * CELL_SIZE
         self.speed = speed
-        self.size = CELL_SIZE - 6   # 角色实际占位像素，略小于格子便于走位
+        self.size = CELL_SIZE - 6  # 角色实际占位像素，略小于格子便于走位
 
     @property
     def pos(self):
         """返回当前所处格子的格子坐标（int）"""
-        return (int((self.x + self.size//2) // CELL_SIZE), int((self.y + self.size//2) // CELL_SIZE))
+        return (int((self.x + self.size // 2) // CELL_SIZE), int((self.y + self.size // 2) // CELL_SIZE))
 
     def move(self, keys, obstacles):
         dx = dy = 0
@@ -160,14 +158,13 @@ class Player:
         grid_x = int((nx + self.size // 2) // CELL_SIZE)
         grid_y = int((ny + self.size // 2) // CELL_SIZE)
         if (0 <= grid_x < GRID_SIZE and 0 <= grid_y < GRID_SIZE and
-            (grid_x, grid_y) not in obstacles):
+                (grid_x, grid_y) not in obstacles):
             self.x = nx
             self.y = ny
 
     def draw(self, screen):
         player_rect = pygame.Rect(int(self.x), int(self.y) + INFO_BAR_HEIGHT, self.size, self.size)
         pygame.draw.rect(screen, (0, 255, 0), player_rect)
-
 
 
 class Zombie:
@@ -227,6 +224,42 @@ class Zombie:
                 return "move", next_pos
 
         return "idle", self.pos
+
+# class Zombie:
+#     def __init__(self, pos, attack=ZOMBIE_ATTACK, speed=ZOMBIE_SPEED):
+#         self.x = pos[0] * CELL_SIZE
+#         self.y = pos[1] * CELL_SIZE
+#         self.attack = attack
+#         self.speed = speed
+#         self.size = CELL_SIZE - 6
+#
+#     @property
+#     def pos(self):
+#         return int((self.x + self.size // 2) // CELL_SIZE), int((self.y + self.size // 2) // CELL_SIZE)
+#
+#     def move_towards(self, target_x, target_y, obstacles):
+#         # 计算朝向
+#         dx = target_x - self.x
+#         dy = target_y - self.y
+#         distance = (dx ** 2 + dy ** 2) ** 0.5
+#         if distance > 0:
+#             # 步长
+#             step = min(self.speed, distance)
+#             move_x = dx / distance * step
+#             move_y = dy / distance * step
+#             nx = self.x + move_x
+#             ny = self.y + move_y
+#             # 碰撞检测同Player
+#             grid_x = int((nx + self.size // 2) // CELL_SIZE)
+#             grid_y = int((ny + self.size // 2) // CELL_SIZE)
+#             if (0 <= grid_x < GRID_SIZE and 0 <= grid_y < GRID_SIZE and
+#                     (grid_x, grid_y) not in obstacles):
+#                 self.x = nx
+#                 self.y = ny
+#
+#     def draw(self, screen):
+#         zombie_rect = pygame.Rect(int(self.x), int(self.y) + INFO_BAR_HEIGHT, self.size, self.size)
+#         pygame.draw.rect(screen, (255, 60, 60), zombie_rect)
 
 
 # ==================== 算法函数 ====================
@@ -508,7 +541,8 @@ def render_game(screen: pygame.Surface, game_state, player: Player, zombies: Lis
         if obstacle.type == "Destructible":
             font = pygame.font.SysFont(None, 30)
             health_text = font.render(str(obstacle.health), True, (255, 255, 255))
-            screen.blit(health_text, (obstacle.pos[0] * CELL_SIZE + 6, obstacle.pos[1] * CELL_SIZE + 8 + INFO_BAR_HEIGHT))
+            screen.blit(health_text,
+                        (obstacle.pos[0] * CELL_SIZE + 6, obstacle.pos[1] * CELL_SIZE + 8 + INFO_BAR_HEIGHT))
         if is_main:
             star = pygame.font.SysFont(None, 32).render("★", True, (255, 255, 120))
             screen.blit(star, (obstacle.pos[0] * CELL_SIZE + 8, obstacle.pos[1] * CELL_SIZE + 8 + INFO_BAR_HEIGHT))
@@ -615,6 +649,12 @@ def main() -> None:
                 pass  # 主道具被主障碍盖住，无法收集
 
         # 僵尸行为
+        # for zombie in zombies:
+        #     zombie.move_towards(player.x, player.y, obstacles)
+        #     # 检查碰撞（可以用两者中心距离<阈值判定，或者像素包围盒重叠）
+        #     if abs(zombie.x - player.x) < zombie.size and abs(zombie.y - player.y) < zombie.size:
+        #         game_result = "fail"
+        #         running = False
         for zombie in zombies:
             if zombie.move_cooldown > 0:
                 zombie.move_cooldown -= 1
@@ -655,7 +695,7 @@ def main() -> None:
             break
 
     # 渲染结算画面+等待点击Restart
-    restart_rect, next_rect = render_game_result(screen, game_result,restart_img, next_img)
+    restart_rect, next_rect = render_game_result(screen, game_result, restart_img, next_img)
     while True:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
