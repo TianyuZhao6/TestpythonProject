@@ -714,6 +714,19 @@ if __name__ == "__main__":
         result = main()
         if result != "restart":
             break
+    # while True:
+    #     config = get_level_config(current_level)
+    #     result, reward = main(config, zombie_cards_collected)
+    #
+    #     if result == "next":
+    #         current_level += 1
+    #         if reward:
+    #             zombie_cards_collected.add(reward)
+    #             print(f"获得新卡牌：{reward}")
+    #     elif result == "restart":
+    #         continue
+    #     else:
+    #         break
 # TODO
 #  IMPROVE THE UI AND HINT  BUGS ABOUT LOCKED ITEM CANNOT SUCCESS/ block arrangement
 #  ADDING MULTIPLE TYPE/ NUMBER OF / Balancing the speed of Zombies & Player
