@@ -23,6 +23,13 @@ ZOMBIE_ATTACK = 10  # 僵尸攻击力
 ZOMBIE_NUM = 2
 ITEMS = 10
 
+
+LEVELS = [
+    {"obstacle_count": 15, "item_count": 3, "zombie_count": 1, "block_hp": 10, "zombie_types": ["basic"], "reward": "zombie_fast"},
+    {"obstacle_count": 18, "item_count": 4, "zombie_count": 2, "block_hp": 15, "zombie_types": ["basic", "strong"], "reward": "zombie_strong"},
+    # 可以继续添加更多关
+]
+
 # 方向向量
 DIRECTIONS = {
     pygame.K_a: (-1, 0),  # 左
@@ -326,6 +333,19 @@ def a_star_search(graph: Graph, start: Tuple[int, int], goal: Tuple[int, int],
 def is_not_edge(pos, grid_size):
     x, y = pos
     return 1 <= x < grid_size - 1 and 1 <= y < grid_size - 1
+
+
+def get_level_config(level: int) -> dict:
+    if level < len(LEVELS):
+        return LEVELS[level]
+    return {
+        "obstacle_count": 20 + level,
+        "item_count": 5,
+        "zombie_count": min(5, 1 + level // 3),
+        "block_hp": int(10 * 1.2 ** (level - len(LEVELS) + 1)),
+        "zombie_types": ["basic", "strong", "fire"][level % 3:],
+        "reward": f"zombie_special_{level}"
+    }
 
 
 def reconstruct_path(came_from: Dict, start: Tuple[int, int], goal: Tuple[int, int]) -> List[Tuple[int, int]]:
