@@ -607,7 +607,7 @@ def render_game_result(screen: pygame.Surface, result: str, restart_img, next_im
 
 
 # ==================== 游戏主循环 ====================
-def main() -> None:
+def main(config, zombie_cards_collected: Set[str]) -> Tuple[str, Optional[str]]:
     """游戏主函数"""
     # 初始化pygame
     pygame.init()
@@ -622,11 +622,17 @@ def main() -> None:
     next_img = pygame.transform.smoothscale(next_img, (icon_size, icon_size))
 
     # 生成游戏实体
+    # obstacles, items, player_start, zombie_starts, main_item_list = generate_game_entities(
+    #     grid_size=GRID_SIZE,
+    #     obstacle_count=OBSTACLES,
+    #     item_count=ITEMS,
+    #     zombie_count=ZOMBIE_NUM
+    # )
     obstacles, items, player_start, zombie_starts, main_item_list = generate_game_entities(
         grid_size=GRID_SIZE,
-        obstacle_count=OBSTACLES,
-        item_count=ITEMS,
-        zombie_count=ZOMBIE_NUM
+        obstacle_count=config["obstacle_count"],
+        item_count=config["item_count"],
+        zombie_count=config["zombie_count"]
     )
 
     # 创建游戏状态管理器
@@ -723,30 +729,39 @@ def main() -> None:
                 sys.exit()
             if event.type == pygame.MOUSEBUTTONDOWN:
                 if restart_rect.collidepoint(event.pos):
-                    return "restart"
+                    return "restart", None
+                if game_result == "success":
+                    return "next", config.get("reward", None)
+                elif game_result == "fail":
+                    return "restart", None
                 if next_rect.collidepoint(event.pos):
                     return "next"
 
 
 # ==================== 游戏主循环 ====================
 if __name__ == "__main__":
-    while True:
-        result = main()
-        if result != "restart":
-            break
     # while True:
-    #     config = get_level_config(current_level)
-    #     result, reward = main(config, zombie_cards_collected)
-    #
-    #     if result == "next":
-    #         current_level += 1
-    #         if reward:
-    #             zombie_cards_collected.add(reward)
-    #             print(f"获得新卡牌：{reward}")
-    #     elif result == "restart":
-    #         continue
-    #     else:
+    #     result = main()
+    #     if result != "restart":
     #         break
+    current_level = 0
+    zombie_cards_collected = set()
+
+    while True:
+        config = get_level_config(current_level)
+        result, reward = main(config, zombie_cards_collected)
+
+        if result == "next":
+            current_level += 1
+            if reward:
+                zombie_cards_collected.add(reward)
+                print(f"获得新卡牌：{reward}")
+        elif result == "restart":
+            continue
+        else:
+            break
+
+
 # TODO
 #  IMPROVE THE UI AND HINT  BUGS ABOUT LOCKED ITEM CANNOT SUCCESS/ block arrangement
 #  ADDING MULTIPLE TYPE/ NUMBER OF / Balancing the speed of Zombies & Player
