@@ -426,31 +426,26 @@ def generate_game_entities(grid_size: int, obstacle_count: int, item_count: int,
 # ----------- 生成开始界面 -----------
 
 def show_start_menu(screen: pygame.Surface) -> bool:
-    """显示开始菜单，点击START后进入游戏"""
+    """显示开始菜单，点击START图像按钮后进入游戏"""
     background = pygame.image.load("start_bg.png").convert()
     background = pygame.transform.scale(background, (WINDOW_SIZE, TOTAL_HEIGHT))
 
-    font = pygame.font.SysFont("Arial", 60, bold=True)
-    start_text = font.render("START", True, (0, 0, 0))
-    start_rect = start_text.get_rect(center=(WINDOW_SIZE // 2, TOTAL_HEIGHT // 2))
+    start_button_img = pygame.image.load("start_button.png").convert_alpha()
+    button_width, button_height = start_button_img.get_size()
 
-    start_button_rect = pygame.Rect(start_rect.left - 20, start_rect.top - 10,
-                                    start_rect.width + 40, start_rect.height + 20)
+    # 居中摆放按钮
+    start_button_rect = start_button_img.get_rect(center=(WINDOW_SIZE // 2, TOTAL_HEIGHT // 2))
 
     while True:
         screen.blit(background, (0, 0))
-
-        pygame.draw.rect(screen, (255, 255, 255), start_button_rect)
-        screen.blit(start_text, start_rect)
-
+        screen.blit(start_button_img, start_button_rect)
         pygame.display.flip()
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
                 sys.exit()
-
-            if event.type == pygame.MOUSEBUTTONDOWN:
+            elif event.type == pygame.MOUSEBUTTONDOWN:
                 if start_button_rect.collidepoint(event.pos):
                     return True
 
