@@ -730,10 +730,16 @@ def main(config, zombie_cards_collected: Set[str]) -> Tuple[str, Optional[str]]:
             if event.type == pygame.MOUSEBUTTONDOWN:
                 if restart_rect.collidepoint(event.pos):
                     return "restart", None
-                if game_result == "success":
-                    return "next", config.get("reward", None)
-                elif game_result == "fail":
-                    return "restart", None
+                while True:
+                    for event in pygame.event.get():
+                        if event.type == pygame.QUIT:
+                            pygame.quit()
+                            sys.exit()
+                        if event.type == pygame.MOUSEBUTTONDOWN:
+                            if restart_rect.collidepoint(event.pos):
+                                return "restart", None
+                            if next_rect.collidepoint(event.pos) and game_result == "success":
+                                return "next", config.get("reward", None)
                 if next_rect.collidepoint(event.pos):
                     return "next"
 
@@ -780,4 +786,4 @@ if __name__ == "__main__":
 #  Working on the aviator and main character design and map design today, getting a little inspired
 #  Have basic knowledge about using pixel art
 
-# And btw still figuring the UI
+# And btw still figuring the UI, Decide to add the full course UI for this game
