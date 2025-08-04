@@ -23,10 +23,11 @@ ZOMBIE_ATTACK = 10  # 僵尸攻击力
 ZOMBIE_NUM = 2
 ITEMS = 10
 
-
 LEVELS = [
-    {"obstacle_count": 15, "item_count": 3, "zombie_count": 1, "block_hp": 10, "zombie_types": ["basic"], "reward": "zombie_fast"},
-    {"obstacle_count": 18, "item_count": 4, "zombie_count": 2, "block_hp": 15, "zombie_types": ["basic", "strong"], "reward": "zombie_strong"},
+    {"obstacle_count": 15, "item_count": 3, "zombie_count": 1, "block_hp": 10, "zombie_types": ["basic"],
+     "reward": "zombie_fast"},
+    {"obstacle_count": 18, "item_count": 4, "zombie_count": 2, "block_hp": 15, "zombie_types": ["basic", "strong"],
+     "reward": "zombie_strong"},
     # 可以继续添加更多关
 ]
 
@@ -232,6 +233,7 @@ class Zombie:
 
         return "idle", self.pos
 
+
 # class Zombie:
 #     def __init__(self, pos, attack=ZOMBIE_ATTACK, speed=ZOMBIE_SPEED):
 #         self.x = pos[0] * CELL_SIZE
@@ -365,7 +367,7 @@ def reconstruct_path(came_from: Dict, start: Tuple[int, int], goal: Tuple[int, i
 
 # ==================== 游戏初始化函数 ====================
 def generate_game_entities(grid_size: int, obstacle_count: int, item_count: int,
-                           zombie_count: int) -> Tuple[Dict, Set, Tuple, List]:
+                           zombie_count: int, main_block_hp: int) -> Tuple[Dict, Set, Tuple, List]:
     """
     生成游戏实体（障碍物、道具、玩家和僵尸位置）
 
@@ -396,7 +398,7 @@ def generate_game_entities(grid_size: int, obstacle_count: int, item_count: int,
     forbidden.add(main_item_pos)
 
     # 主障碍（MainBlock）
-    obstacles = {main_item_pos: MainBlock(main_item_pos, health=MAIN_BLOCK_HEALTH)}
+    obstacles = {main_item_pos: MainBlock(main_item_pos, health=main_block_hp)}
 
     rest_obstacle_candidates = [p for p in all_positions if p not in forbidden]
     rest_count = obstacle_count - 1
@@ -419,6 +421,38 @@ def generate_game_entities(grid_size: int, obstacle_count: int, item_count: int,
     items.add(main_item_pos)  # 主道具
 
     return obstacles, items, player_pos, zombie_pos_list, [main_item_pos]  # main_item_pos可为列表支持多关卡
+
+
+# ----------- 生成开始界面 -----------
+
+def show_start_menu(screen: pygame.Surface) -> bool:
+    """显示开始菜单，点击START后进入游戏"""
+    background = pygame.image.load("start_bg.png").convert()
+    background = pygame.transform.scale(background, (WINDOW_SIZE, TOTAL_HEIGHT))
+
+    font = pygame.font.SysFont("Arial", 60, bold=True)
+    start_text = font.render("START", True, (0, 0, 0))
+    start_rect = start_text.get_rect(center=(WINDOW_SIZE // 2, TOTAL_HEIGHT // 2))
+
+    start_button_rect = pygame.Rect(start_rect.left - 20, start_rect.top - 10,
+                                    start_rect.width + 40, start_rect.height + 20)
+
+    while True:
+        screen.blit(background, (0, 0))
+
+        pygame.draw.rect(screen, (255, 255, 255), start_button_rect)
+        screen.blit(start_text, start_rect)
+
+        pygame.display.flip()
+
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                if start_button_rect.collidepoint(event.pos):
+                    return True
 
 
 # ----------- 生成格子地图 -----------
@@ -632,7 +666,8 @@ def main(config, zombie_cards_collected: Set[str]) -> Tuple[str, Optional[str]]:
         grid_size=GRID_SIZE,
         obstacle_count=config["obstacle_count"],
         item_count=config["item_count"],
-        zombie_count=config["zombie_count"]
+        zombie_count=config["zombie_count"],
+        main_block_hp=config["block_hp"]
     )
 
     # 创建游戏状态管理器
@@ -746,10 +781,15 @@ def main(config, zombie_cards_collected: Set[str]) -> Tuple[str, Optional[str]]:
 
 # ==================== 游戏主循环 ====================
 if __name__ == "__main__":
-    # while True:
-    #     result = main()
-    #     if result != "restart":
-    #         break
+    pygame.init()
+    screen = pygame.display.set_mode((WINDOW_SIZE, TOTAL_HEIGHT))
+    pygame.display.set_caption("Zombie Card Game")
+
+    # 开始界面
+    if not show_start_menu(screen):
+        sys.exit()
+
+    # 主游戏循环
     current_level = 0
     zombie_cards_collected = set()
 
@@ -766,7 +806,6 @@ if __name__ == "__main__":
             continue
         else:
             break
-
 
 # TODO
 #  IMPROVE THE UI AND HINT  BUGS ABOUT LOCKED ITEM CANNOT SUCCESS/ block arrangement
