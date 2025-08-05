@@ -821,3 +821,18 @@ if __name__ == "__main__":
 #  Have basic knowledge about using pixel art
 
 # And btw still figuring the UI, Decide to add the full course UI for this game
+# 核心设定：
+#
+# 玩家扮演 "Neuro Runner" - 拥有侵入他人意识能力的神经漫游者
+#
+# 游戏场景发生在 "Mindscape 心象空间" - 由人类潜意识构成的虚拟世界
+#
+# 僵尸是 "CogniCorrupted 认知腐化者" - 被病毒感染的记忆碎片
+#
+# 障碍物是 "Mental Blocks 心之壁" - 人类的心理防御机制
+#
+# 奖励物品是 "Memory Fragments 记忆碎片" - 包含关键信息的意识数据包
+#
+# 故事背景：
+# 在2045年，全球神经网络被"NeuroVirus"感染，人类集体意识陷入混乱。玩家作为最后一批清醒的神经漫游者，必须潜入被感染的意识空间，
+# 收集关键记忆碎片，重建人类认知防火墙。主障碍代表最深层的心理创伤，必须通过引导认知腐化者（僵尸）来解构。
