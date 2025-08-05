@@ -818,7 +818,7 @@ if __name__ == "__main__":
 #  , it has nothing to do directly with the game set
 #  Add a potion to control zombie possess the body
 #  Working on the aviator and main character design and map design today, getting a little inspired
-#  Have basic knowledge about using pixel art
+#  Turn to pixel design, give up the block set.etc
 
 # And btw still figuring the UI, Decide to add the full course UI for this game
 # 核心设定：
