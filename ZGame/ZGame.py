@@ -77,8 +77,9 @@ class Obstacle:
             obstacle_type: 障碍物类型 ("Destructible" 或 "Indestructible")
             health: 可破坏障碍物的生命值 (仅对可破坏障碍物有效)
         """
-        # self.pos: Tuple[int, int] = pos
-        self.rect = pygame.Rect(x, y + INFO_BAR_HEIGHT, CELL_SIZE, CELL_SIZE)
+        px = x * CELL_SIZE
+        py = y * CELL_SIZE + INFO_BAR_HEIGHT
+        self.rect = pygame.Rect(px, py, CELL_SIZE, CELL_SIZE)
         self.type: str = obstacle_type
         self.health: Optional[int] = health
 
@@ -96,6 +97,25 @@ class MainBlock(Obstacle):
         # def __init__(self, pos: Tuple[int, int], health: Optional[int] = MAIN_BLOCK_HEALTH):
         super().__init__(x, y, "Destructible", health)
         self.is_main_block = True
+
+
+class Item:
+    def __init__(self, x: int, y: int, is_main=False):
+        self.x = x
+        self.y = y
+        self.is_main = is_main
+        self.radius = CELL_SIZE // 3
+        # 以中心点为主，方便后续像素判定
+        self.center = (
+            self.x * CELL_SIZE + CELL_SIZE // 2,
+            self.y * CELL_SIZE + CELL_SIZE // 2 + INFO_BAR_HEIGHT
+        )
+        self.rect = pygame.Rect(
+            self.center[0] - self.radius,
+            self.center[1] - self.radius,
+            self.radius * 2,
+            self.radius * 2
+        )
 
 
 # ---------- OO 角色定义 ----------
@@ -174,7 +194,7 @@ class Player:
         next_rect = pygame.Rect(int(nx), int(ny) + INFO_BAR_HEIGHT, self.size, self.size)
         can_move = True
         for ob in obstacles.values():
-            if ob.type == "Indestructible" and next_rect.colliderect(ob.rect):
+            if next_rect.colliderect(ob.rect):
                 can_move = False
                 break
 
@@ -233,74 +253,66 @@ class Zombie:
         """返回当前所处格子的格子坐标（兼容原A*寻路）"""
         return int((self.x + self.size // 2) // CELL_SIZE), int((self.y + self.size // 2) // CELL_SIZE)
 
-    # def chase(self, target_pos: Tuple[int, int], graph: Graph,
-    #           obstacles: Dict[Tuple[int, int], Obstacle]) -> Tuple[str, Tuple[int, int]]:
-    #     """
-    #     追逐目标位置
-    #
-    #     Args:
-    #         target_pos: 目标位置 (玩家位置)
-    #         graph: 地图图结构
-    #         obstacles: 障碍物字典
-    #
-    #     Returns:
-    #         (动作类型, 目标位置)
-    #     """
-    #     # 使用A*算法查找路径
-    #     came_from, _ = a_star_search(graph, self.pos, target_pos, obstacles)
-    #     path = reconstruct_path(came_from, self.pos, target_pos)
-    #
-    #     if len(path) > 1:
-    #         next_pos = path[1]
-    #
-    #         # 如果下一个位置是可破坏障碍物
-    #         if next_pos in obstacles and obstacles[next_pos].type == "Destructible":
-    #             # 攻击障碍物
-    #             obstacles[next_pos].health -= self.attack
-    #
-    #             # 检查障碍物是否被破坏
-    #             if obstacles[next_pos].health <= 0:
-    #                 del obstacles[next_pos]
-    #                 return "destroy", next_pos
-    #             else:
-    #                 return "attack", next_pos
-    #
-    #         # 如果下一个位置可通行
-    #         elif next_pos not in obstacles:
-    #             self.pos = next_pos
-    #             self.breaking_obstacle = None
-    #             return "move", next_pos
-    #
-    #     return "idle", self.pos
-    def move_towards(self, target_x: float, target_y: float, obstacles: list):
-        """逐像素追踪玩家，并与障碍物碰撞"""
-        dx = target_x - self.x
-        dy = target_y - self.y
-        distance = math.hypot(dx, dy)
-        if distance == 0:
-            return
+    def move_and_attack(self, player, obstacles, game_state, attack_interval=0.5, dt=1 / 60):
+        # attack_interval 秒攻击一次（例如 0.5s），dt 是本帧时长
+        if not hasattr(self, 'attack_timer'):
+            self.attack_timer = 0
+        self.attack_timer += dt
 
-        step = min(self.speed, distance)
-        dx, dy = dx / distance * step, dy / distance * step
+        dx = player.x - self.x
+        dy = player.y - self.y
+        speed = self.speed
 
-        # 预测下一帧碰撞盒
-        next_rect = self.rect.move(dx, dy)
-        can_move = True
-        for ob in obstacles:
-            if ob.type == "Indestructible" and next_rect.colliderect(ob.rect):
-                can_move = False
-                break
-        if can_move:
-            self.x += dx
-            self.y += dy
-            self.rect.x = int(self.x)
-            self.rect.y = int(self.y) + INFO_BAR_HEIGHT
+        # 按主方向、次方向、正交方向尝试
+        dirs = []
+        if abs(dx) > abs(dy):
+            dirs = [(sign(dx), 0), (0, sign(dy)), (sign(dx), sign(dy)), (-sign(dx), 0), (0, -sign(dy))]
+        else:
+            dirs = [(0, sign(dy)), (sign(dx), 0), (sign(dx), sign(dy)), (0, -sign(dy)), (-sign(dx), 0)]
+
+        moved = False
+        for ddx, ddy in dirs:
+            if ddx == 0 and ddy == 0:
+                continue
+            next_rect = self.rect.move(ddx * speed, ddy * speed)
+            blocked = False
+            for ob in obstacles:
+                if next_rect.colliderect(ob.rect):
+                    if ob.type == "Destructible":
+                        if self.attack_timer >= attack_interval:
+                            ob.health -= self.attack
+                            self.attack_timer = 0
+                            if ob.health <= 0:
+                                grid_pos = ob.grid_pos
+                                if grid_pos in game_state.obstacles:
+                                    del game_state.obstacles[grid_pos]
+                        blocked = True
+                        break
+                    elif ob.type == "Indestructible":
+                        blocked = True
+                        break
+            if not blocked:
+                self.x += ddx * speed
+                self.y += ddy * speed
+                self.rect.x = int(self.x)
+                self.rect.y = int(self.y) + INFO_BAR_HEIGHT
+                moved = True
+                break  # 已经移动成功
+        return moved
 
     def draw(self, screen):
         pygame.draw.rect(screen, (255, 60, 60), self.rect)
 
 
 # ==================== 算法函数 ====================
+def sign(v):
+    if v > 0:
+        return 1
+    if v < 0:
+        return -1
+    return 0
+
+
 def heuristic(a, b):
     # 曼哈顿距离，适合格子图
     return abs(a[0] - b[0]) + abs(a[1] - b[1])
@@ -453,8 +465,8 @@ def generate_game_entities(grid_size: int, obstacle_count: int, item_count: int,
     # 其它道具
     item_candidates = [p for p in all_positions if p not in forbidden]
     other_items = random.sample(item_candidates, item_count - 1)
-    items = set(other_items)
-    items.add(main_item_pos)  # 主道具
+    items = [Item(pos[0], pos[1]) for pos in other_items]
+    items.append(Item(main_item_pos[0], main_item_pos[1], is_main=True))  # MainBlock
 
     return obstacles, items, player_pos, zombie_pos_list, [main_item_pos]  # main_item_pos可为列表支持多关卡
 
@@ -544,14 +556,22 @@ class GameState:
     #     # 条件2: 所有可破坏障碍物已被破坏
     #     return len(self.items) == 1 and self.destructible_count == 0
 
-    def collect_item(self, pos: Tuple[int, int]) -> bool:
-        """收集物品，如果是主物品且未解锁则无法收集"""
-        # 只有主障碍不在时才能收集主道具
-        if pos in self.main_item_pos and pos in self.obstacles:
-            return False
-        if pos in self.items:
-            self.items.remove(pos)
-            return True
+    # def collect_item(self, pos: Tuple[int, int]) -> bool:
+    #     """收集物品，如果是主物品且未解锁则无法收集"""
+    #     # 只有主障碍不在时才能收集主道具
+    #     if pos in self.main_item_pos and pos in self.obstacles:
+    #         return False
+    #     if pos in self.items:
+    #         self.items.remove(pos)
+    #         return True
+    #     return False
+    def collect_item(self, player_rect):
+        for item in list(self.items):  # 用 list 防止迭代时删
+            if player_rect.colliderect(item.rect):
+                if item.is_main and any(getattr(ob, "is_main_block", False) for ob in self.obstacles.values()):
+                    return False  # 主障碍未破坏不能捡主道具
+                self.items.remove(item)
+                return True
         return False
 
     def destroy_obstacle(self, pos: Tuple[int, int]):
@@ -587,11 +607,13 @@ def render_game(screen: pygame.Surface, game_state, player: Player, zombies: Lis
             pygame.draw.rect(screen, (50, 50, 50), rect, 1)
 
     # 绘制道具
-    for item_pos in game_state.items:
-        is_main = item_pos in game_state.main_item_pos
-        color = (255, 255, 100) if is_main else (255, 255, 0)
-        center = (item_pos[0] * CELL_SIZE + CELL_SIZE // 2, item_pos[1] * CELL_SIZE + CELL_SIZE // 2 + INFO_BAR_HEIGHT)
-        pygame.draw.circle(screen, color, center, CELL_SIZE // 3)
+    for item in game_state.items:
+        color = (255, 255, 100) if item.is_main else (255, 255, 0)
+        pygame.draw.circle(screen, color, item.center, item.radius)
+        # is_main = item_pos in game_state.main_item_pos
+        # color = (255, 255, 100) if is_main else (255, 255, 0)
+        # center = (item_pos[0] * CELL_SIZE + CELL_SIZE // 2, item_pos[1] * CELL_SIZE + CELL_SIZE // 2 + INFO_BAR_HEIGHT)
+        # pygame.draw.circle(screen, color, center, CELL_SIZE // 3)
 
     # 绘制玩家
     player_rect = pygame.Rect(
@@ -735,15 +757,11 @@ def main(config, zombie_cards_collected: Set[str]) -> Tuple[str, Optional[str]]:
         player.move(keys, game_state.obstacles)
 
         # 检查玩家是否拾取道具
-        if player.pos in game_state.items:
-            if game_state.collect_item(player.pos):
-                pass  # 收集成功
-            else:
-                pass  # 主道具被主障碍盖住，无法收集
+        game_state.collect_item(player.rect)
 
         for zombie in zombies:
             # 僵尸像素级追踪玩家
-            zombie.move_towards(player.x, player.y, list(game_state.obstacles.values()))
+            zombie.move_and_attack(player, list(game_state.obstacles.values()), game_state)
             # 僵尸与玩家像素碰撞则失败
             player_rect = pygame.Rect(int(player.x), int(player.y) + INFO_BAR_HEIGHT, player.size, player.size)
             if zombie.rect.colliderect(player_rect):
@@ -774,10 +792,10 @@ def main(config, zombie_cards_collected: Set[str]) -> Tuple[str, Optional[str]]:
         #         game_result = "fail"
         #         game_running = False
         #
-        # # 检查胜利条件（收集所有道具）
-        # if not game_state.items and game_result is None:
-        #     game_result = "success"
-        #     game_running = False
+        # 检查胜利条件（收集所有道具）
+        if not game_state.items:
+            game_result = "success"
+            break
 
         # ...游戏内容渲染...
         render_game(screen, game_state, player, zombies)
