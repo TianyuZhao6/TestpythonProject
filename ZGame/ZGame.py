@@ -170,17 +170,34 @@ class Player:
         nx = self.x + dx * self.speed
         ny = self.y + dy * self.speed
 
-        # 检测“新像素位置”是否进入障碍格
-        grid_x = int((nx + self.size // 2) // CELL_SIZE)
-        grid_y = int((ny + self.size // 2) // CELL_SIZE)
-        if (0 <= grid_x < GRID_SIZE and 0 <= grid_y < GRID_SIZE and
-                (grid_x, grid_y) not in obstacles):
+        # 预测下一帧碰撞盒
+        next_rect = pygame.Rect(int(nx), int(ny) + INFO_BAR_HEIGHT, self.size, self.size)
+        can_move = True
+        for ob in obstacles.values():
+            if ob.type == "Indestructible" and next_rect.colliderect(ob.rect):
+                can_move = False
+                break
+
+        if can_move and 0 <= nx < WINDOW_SIZE - self.size and 0 <= ny < WINDOW_SIZE - self.size:
             self.x = nx
             self.y = ny
+            self.rect.x = int(self.x)
+            self.rect.y = int(self.y) + INFO_BAR_HEIGHT
 
     def draw(self, screen):
-        player_rect = pygame.Rect(int(self.x), int(self.y) + INFO_BAR_HEIGHT, self.size, self.size)
-        pygame.draw.rect(screen, (0, 255, 0), player_rect)
+        pygame.draw.rect(screen, (0, 255, 0), self.rect)
+
+        # 检测“新像素位置”是否进入障碍格
+    #     grid_x = int((nx + self.size // 2) // CELL_SIZE)
+    #     grid_y = int((ny + self.size // 2) // CELL_SIZE)
+    #     if (0 <= grid_x < GRID_SIZE and 0 <= grid_y < GRID_SIZE and
+    #             (grid_x, grid_y) not in obstacles):
+    #         self.x = nx
+    #         self.y = ny
+    #
+    # def draw(self, screen):
+    #     player_rect = pygame.Rect(int(self.x), int(self.y) + INFO_BAR_HEIGHT, self.size, self.size)
+    #     pygame.draw.rect(screen, (0, 255, 0), player_rect)
 
 
 class Zombie:
@@ -583,7 +600,7 @@ def render_game(screen: pygame.Surface, game_state, player: Player, zombies: Lis
         CELL_SIZE,
         CELL_SIZE
     )
-    pygame.draw.rect(screen, (0, 255, 0), player_rect)
+    pygame.draw.rect(screen, (0, 255, 0), player.rect)
 
     # 绘制所有僵尸
     # for zombie in zombies:
@@ -715,7 +732,7 @@ def main(config, zombie_cards_collected: Set[str]) -> Tuple[str, Optional[str]]:
         #         player.move(direction, obstacles)
         #         break
         keys = pygame.key.get_pressed()
-        player.move(keys, obstacles)
+        player.move(keys, game_state.obstacles)
 
         # 检查玩家是否拾取道具
         if player.pos in game_state.items:
