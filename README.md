@@ -102,4 +102,20 @@ Multiplayer cooperative mode
 License
 This project is licensed under the MIT License - see the LICENSE.md file for details.
 
-Survive. Strategize. Escape. Will you unlock your freedom or become prey to zombies? The choice is yours!
+Survive. Strategies. Escape. Will you unlock your freedom or become prey to zombies? The choice is yours!
+
+entities.py：Player, Zombie, Obstacle, MainBlock, Item 
+
+level.py：LEVELS，get_level_config, generate_game_entities
+
+state.py：GameState
+
+utils.py：sign, heuristic, a_star_search, reconstruct_path 
+
+menu.py：show_start_menu
+
+game_render.py：render_game
+
+result_screen.py：render_game_result
+
+main.py：流程控制（菜单->关卡->结算->下关）
