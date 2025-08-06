@@ -18,7 +18,7 @@ OBSTACLE_HEALTH = 20  # 可破坏障碍物初始血量
 MAIN_BLOCK_HEALTH = 40
 DESTRUCTIBLE_RATIO = 0.3
 PLAYER_SPEED = 5
-ZOMBIE_SPEED = 30
+ZOMBIE_SPEED = 2
 ZOMBIE_ATTACK = 10  # 僵尸攻击力
 ZOMBIE_NUM = 2
 ITEMS = 10
@@ -67,7 +67,8 @@ class Graph:
 class Obstacle:
     """表示游戏中的障碍物"""
 
-    def __init__(self, pos: Tuple[int, int], obstacle_type: str, health: Optional[int] = None):
+    def __init__(self, x: int, y: int, obstacle_type: str, health: Optional[int] = None):
+        # def __init__(self, pos: Tuple[int, int], obstacle_type: str, health: Optional[int] = None):
         """
         初始化障碍物
 
@@ -76,7 +77,8 @@ class Obstacle:
             obstacle_type: 障碍物类型 ("Destructible" 或 "Indestructible")
             health: 可破坏障碍物的生命值 (仅对可破坏障碍物有效)
         """
-        self.pos: Tuple[int, int] = pos
+        # self.pos: Tuple[int, int] = pos
+        self.rect = pygame.Rect(x, y + INFO_BAR_HEIGHT, CELL_SIZE, CELL_SIZE)
         self.type: str = obstacle_type
         self.health: Optional[int] = health
 
@@ -84,10 +86,15 @@ class Obstacle:
         """检查障碍物是否已被破坏"""
         return self.type == "Destructible" and self.health <= 0
 
+    @property
+    def grid_pos(self):
+        return self.rect.x // CELL_SIZE, (self.rect.y - INFO_BAR_HEIGHT) // CELL_SIZE
+
 
 class MainBlock(Obstacle):
-    def __init__(self, pos: Tuple[int, int], health: Optional[int] = MAIN_BLOCK_HEALTH):
-        super().__init__(pos, "Destructible", health)
+    def __init__(self, x: int, y: int, health: Optional[int] = MAIN_BLOCK_HEALTH):
+        # def __init__(self, pos: Tuple[int, int], health: Optional[int] = MAIN_BLOCK_HEALTH):
+        super().__init__(x, y, "Destructible", health)
         self.is_main_block = True
 
 
@@ -138,11 +145,12 @@ class Player:
         self.y = pos[1] * CELL_SIZE
         self.speed = speed
         self.size = CELL_SIZE - 6  # 角色实际占位像素，略小于格子便于走位
+        self.rect = pygame.Rect(self.x, self.y + INFO_BAR_HEIGHT, self.size, self.size)
 
     @property
     def pos(self):
         """返回当前所处格子的格子坐标（int）"""
-        return (int((self.x + self.size // 2) // CELL_SIZE), int((self.y + self.size // 2) // CELL_SIZE))
+        return int((self.x + self.size // 2) // CELL_SIZE), int((self.y + self.size // 2) // CELL_SIZE)
 
     def move(self, keys, obstacles):
         dx = dy = 0
@@ -178,97 +186,101 @@ class Player:
 class Zombie:
     """僵尸角色"""
 
+    # def __init__(self, pos: Tuple[int, int], attack: int = ZOMBIE_ATTACK, speed: int = ZOMBIE_SPEED):
+    #     """
+    #     初始化僵尸
+    #
+    #     Args:
+    #         pos: 初始位置 (x, y)
+    #         attack: 攻击力
+    #         speed: 移动速度 (值越大移动越慢)
+    #     """
+    #     self.pos: Tuple[int, int] = pos
+    #     self.attack: int = attack
+    #     self.speed: int = speed
+    #     self.move_cooldown: int = random.randint(0, speed - 1)  # 让僵尸移动不完全同步
+    #     self.breaking_obstacle: Optional[Tuple[int, int]] = None
+    """像素自由移动版僵尸"""
+
     def __init__(self, pos: Tuple[int, int], attack: int = ZOMBIE_ATTACK, speed: int = ZOMBIE_SPEED):
-        """
-        初始化僵尸
+        # 初始格子坐标转像素
+        self.x = pos[0] * CELL_SIZE
+        self.y = pos[1] * CELL_SIZE
+        self.attack = attack
+        self.speed = speed
+        self.size = CELL_SIZE - 6  # 可微调
+        self.rect = pygame.Rect(self.x, self.y + INFO_BAR_HEIGHT, self.size, self.size)
 
-        Args:
-            pos: 初始位置 (x, y)
-            attack: 攻击力
-            speed: 移动速度 (值越大移动越慢)
-        """
-        self.pos: Tuple[int, int] = pos
-        self.attack: int = attack
-        self.speed: int = speed
-        self.move_cooldown: int = random.randint(0, speed - 1)  # 让僵尸移动不完全同步
-        self.breaking_obstacle: Optional[Tuple[int, int]] = None
+    @property
+    def pos(self) -> Tuple[int, int]:
+        """返回当前所处格子的格子坐标（兼容原A*寻路）"""
+        return int((self.x + self.size // 2) // CELL_SIZE), int((self.y + self.size // 2) // CELL_SIZE)
 
-    def chase(self, target_pos: Tuple[int, int], graph: Graph,
-              obstacles: Dict[Tuple[int, int], Obstacle]) -> Tuple[str, Tuple[int, int]]:
-        """
-        追逐目标位置
+    # def chase(self, target_pos: Tuple[int, int], graph: Graph,
+    #           obstacles: Dict[Tuple[int, int], Obstacle]) -> Tuple[str, Tuple[int, int]]:
+    #     """
+    #     追逐目标位置
+    #
+    #     Args:
+    #         target_pos: 目标位置 (玩家位置)
+    #         graph: 地图图结构
+    #         obstacles: 障碍物字典
+    #
+    #     Returns:
+    #         (动作类型, 目标位置)
+    #     """
+    #     # 使用A*算法查找路径
+    #     came_from, _ = a_star_search(graph, self.pos, target_pos, obstacles)
+    #     path = reconstruct_path(came_from, self.pos, target_pos)
+    #
+    #     if len(path) > 1:
+    #         next_pos = path[1]
+    #
+    #         # 如果下一个位置是可破坏障碍物
+    #         if next_pos in obstacles and obstacles[next_pos].type == "Destructible":
+    #             # 攻击障碍物
+    #             obstacles[next_pos].health -= self.attack
+    #
+    #             # 检查障碍物是否被破坏
+    #             if obstacles[next_pos].health <= 0:
+    #                 del obstacles[next_pos]
+    #                 return "destroy", next_pos
+    #             else:
+    #                 return "attack", next_pos
+    #
+    #         # 如果下一个位置可通行
+    #         elif next_pos not in obstacles:
+    #             self.pos = next_pos
+    #             self.breaking_obstacle = None
+    #             return "move", next_pos
+    #
+    #     return "idle", self.pos
+    def move_towards(self, target_x: float, target_y: float, obstacles: list):
+        """逐像素追踪玩家，并与障碍物碰撞"""
+        dx = target_x - self.x
+        dy = target_y - self.y
+        distance = math.hypot(dx, dy)
+        if distance == 0:
+            return
 
-        Args:
-            target_pos: 目标位置 (玩家位置)
-            graph: 地图图结构
-            obstacles: 障碍物字典
+        step = min(self.speed, distance)
+        dx, dy = dx / distance * step, dy / distance * step
 
-        Returns:
-            (动作类型, 目标位置)
-        """
-        # 使用A*算法查找路径
-        came_from, _ = a_star_search(graph, self.pos, target_pos, obstacles)
-        path = reconstruct_path(came_from, self.pos, target_pos)
+        # 预测下一帧碰撞盒
+        next_rect = self.rect.move(dx, dy)
+        can_move = True
+        for ob in obstacles:
+            if ob.type == "Indestructible" and next_rect.colliderect(ob.rect):
+                can_move = False
+                break
+        if can_move:
+            self.x += dx
+            self.y += dy
+            self.rect.x = int(self.x)
+            self.rect.y = int(self.y) + INFO_BAR_HEIGHT
 
-        if len(path) > 1:
-            next_pos = path[1]
-
-            # 如果下一个位置是可破坏障碍物
-            if next_pos in obstacles and obstacles[next_pos].type == "Destructible":
-                # 攻击障碍物
-                obstacles[next_pos].health -= self.attack
-
-                # 检查障碍物是否被破坏
-                if obstacles[next_pos].health <= 0:
-                    del obstacles[next_pos]
-                    return "destroy", next_pos
-                else:
-                    return "attack", next_pos
-
-            # 如果下一个位置可通行
-            elif next_pos not in obstacles:
-                self.pos = next_pos
-                self.breaking_obstacle = None
-                return "move", next_pos
-
-        return "idle", self.pos
-
-
-# class Zombie:
-#     def __init__(self, pos, attack=ZOMBIE_ATTACK, speed=ZOMBIE_SPEED):
-#         self.x = pos[0] * CELL_SIZE
-#         self.y = pos[1] * CELL_SIZE
-#         self.attack = attack
-#         self.speed = speed
-#         self.size = CELL_SIZE - 6
-#
-#     @property
-#     def pos(self):
-#         return int((self.x + self.size // 2) // CELL_SIZE), int((self.y + self.size // 2) // CELL_SIZE)
-#
-#     def move_towards(self, target_x, target_y, obstacles):
-#         # 计算朝向
-#         dx = target_x - self.x
-#         dy = target_y - self.y
-#         distance = (dx ** 2 + dy ** 2) ** 0.5
-#         if distance > 0:
-#             # 步长
-#             step = min(self.speed, distance)
-#             move_x = dx / distance * step
-#             move_y = dy / distance * step
-#             nx = self.x + move_x
-#             ny = self.y + move_y
-#             # 碰撞检测同Player
-#             grid_x = int((nx + self.size // 2) // CELL_SIZE)
-#             grid_y = int((ny + self.size // 2) // CELL_SIZE)
-#             if (0 <= grid_x < GRID_SIZE and 0 <= grid_y < GRID_SIZE and
-#                     (grid_x, grid_y) not in obstacles):
-#                 self.x = nx
-#                 self.y = ny
-#
-#     def draw(self, screen):
-#         zombie_rect = pygame.Rect(int(self.x), int(self.y) + INFO_BAR_HEIGHT, self.size, self.size)
-#         pygame.draw.rect(screen, (255, 60, 60), zombie_rect)
+    def draw(self, screen):
+        pygame.draw.rect(screen, (255, 60, 60), self.rect)
 
 
 # ==================== 算法函数 ====================
@@ -373,6 +385,12 @@ def generate_game_entities(grid_size: int, obstacle_count: int, item_count: int,
 
     Returns:
          (障碍物字典, 道具集合, 玩家位置, 僵尸位置列表, 锁定物品位置)
+         obstacles_dict: Dict[grid_pos, Obstacle]
+        obstacle_pixel_list: List[Obstacle]  # 用于碰撞检测
+        items: Set[Tuple[int, int]]
+        player_start: (x, y)
+        zombie_starts: List[(x, y)]
+        main_item_pos: List[Tuple[int, int]]
     """
     all_positions = [(x, y) for x in range(grid_size) for y in range(grid_size)]
     corners = [(0, 0), (0, grid_size - 1), (grid_size - 1, 0), (grid_size - 1, grid_size - 1)]
@@ -398,7 +416,8 @@ def generate_game_entities(grid_size: int, obstacle_count: int, item_count: int,
     forbidden.add(main_item_pos)
 
     # 主障碍（MainBlock）
-    obstacles = {main_item_pos: MainBlock(main_item_pos, health=main_block_hp)}
+    # obstacles = {main_item_pos: MainBlock(main_item_pos, health=main_block_hp)}
+    obstacles = {main_item_pos: MainBlock(main_item_pos[0], main_item_pos[1], health=main_block_hp)}
 
     rest_obstacle_candidates = [p for p in all_positions if p not in forbidden]
     rest_count = obstacle_count - 1
@@ -408,10 +427,10 @@ def generate_game_entities(grid_size: int, obstacle_count: int, item_count: int,
 
     # 可破坏障碍
     for pos in rest_obstacle_positions[:destructible_count]:
-        obstacles[pos] = Obstacle(pos, "Destructible", health=OBSTACLE_HEALTH)
+        obstacles[pos] = Obstacle(pos[0], pos[1], "Destructible", health=OBSTACLE_HEALTH)
     # 不可破坏障碍
     for pos in rest_obstacle_positions[destructible_count:]:
-        obstacles[pos] = Obstacle(pos, "Indestructible")
+        obstacles[pos] = Obstacle(pos[0], pos[1], "Indestructible")
     forbidden |= set(obstacles.keys())
 
     # 其它道具
@@ -567,14 +586,16 @@ def render_game(screen: pygame.Surface, game_state, player: Player, zombies: Lis
     pygame.draw.rect(screen, (0, 255, 0), player_rect)
 
     # 绘制所有僵尸
+    # for zombie in zombies:
+    #     zombie_rect = pygame.Rect(
+    #         zombie.pos[0] * CELL_SIZE,
+    #         zombie.pos[1] * CELL_SIZE + INFO_BAR_HEIGHT,
+    #         CELL_SIZE,
+    #         CELL_SIZE
+    #     )
+    #     pygame.draw.rect(screen, (255, 60, 60), zombie_rect)
     for zombie in zombies:
-        zombie_rect = pygame.Rect(
-            zombie.pos[0] * CELL_SIZE,
-            zombie.pos[1] * CELL_SIZE + INFO_BAR_HEIGHT,
-            CELL_SIZE,
-            CELL_SIZE
-        )
-        pygame.draw.rect(screen, (255, 60, 60), zombie_rect)
+        pygame.draw.rect(screen, (255, 60, 60), zombie.rect)
 
     # 绘制障碍物
     for obstacle in game_state.obstacles.values():
@@ -585,16 +606,15 @@ def render_game(screen: pygame.Surface, game_state, player: Player, zombies: Lis
             color = (120, 120, 120)  # 灰色
         else:
             color = (200, 80, 80)  # 可破坏：红
-        pygame.draw.rect(screen, color, pygame.Rect(
-            obstacle.pos[0] * CELL_SIZE, obstacle.pos[1] * CELL_SIZE + INFO_BAR_HEIGHT, CELL_SIZE, CELL_SIZE))
+        pygame.draw.rect(screen, color, obstacle.rect)
         if obstacle.type == "Destructible":
             font = pygame.font.SysFont(None, 30)
             health_text = font.render(str(obstacle.health), True, (255, 255, 255))
             screen.blit(health_text,
-                        (obstacle.pos[0] * CELL_SIZE + 6, obstacle.pos[1] * CELL_SIZE + 8 + INFO_BAR_HEIGHT))
+                        (obstacle.rect.x + 6, obstacle.rect.y + 8))
         if is_main:
             star = pygame.font.SysFont(None, 32).render("★", True, (255, 255, 120))
-            screen.blit(star, (obstacle.pos[0] * CELL_SIZE + 8, obstacle.pos[1] * CELL_SIZE + 8 + INFO_BAR_HEIGHT))
+            screen.blit(star, (obstacle.rect.x + 8, obstacle.rect.y + 8))
 
 
 def render_game_result(screen: pygame.Surface, result: str, restart_img, next_img) -> Tuple[pygame.Rect, pygame.Rect]:
@@ -704,42 +724,43 @@ def main(config, zombie_cards_collected: Set[str]) -> Tuple[str, Optional[str]]:
             else:
                 pass  # 主道具被主障碍盖住，无法收集
 
-        # 僵尸行为
-        # for zombie in zombies:
-        #     zombie.move_towards(player.x, player.y, obstacles)
-        #     # 检查碰撞（可以用两者中心距离<阈值判定，或者像素包围盒重叠）
-        #     if abs(zombie.x - player.x) < zombie.size and abs(zombie.y - player.y) < zombie.size:
-        #         game_result = "fail"
-        #         running = False
         for zombie in zombies:
-            if zombie.move_cooldown > 0:
-                zombie.move_cooldown -= 1
-                continue
-
-            action, target_pos = zombie.chase(player.pos, graph, obstacles)
-
-            # 处理障碍物被破坏的情况
-            if action == "destroy":
-                # 更新游戏状态
-                game_state.destroy_obstacle(target_pos)
-                # 重建图
-                graph = build_graph(GRID_SIZE, game_state.obstacles)
-
-            # 处理僵尸移动
-            if action == "move":
-                zombie.pos = target_pos
-
-            zombie.move_cooldown = zombie.speed
-
-            # 检查僵尸是否抓到玩家
-            if zombie.pos == player.pos:
+            # 僵尸像素级追踪玩家
+            zombie.move_towards(player.x, player.y, list(game_state.obstacles.values()))
+            # 僵尸与玩家像素碰撞则失败
+            player_rect = pygame.Rect(int(player.x), int(player.y) + INFO_BAR_HEIGHT, player.size, player.size)
+            if zombie.rect.colliderect(player_rect):
                 game_result = "fail"
-                game_running = False
-
-        # 检查胜利条件（收集所有道具）
-        if not game_state.items and game_result is None:
-            game_result = "success"
-            game_running = False
+                break
+        # for zombie in zombies:
+        #     if zombie.move_cooldown > 0:
+        #         zombie.move_cooldown -= 1
+        #         continue
+        #
+        #     action, target_pos = zombie.chase(player.pos, graph, obstacles)
+        #
+        #     # 处理障碍物被破坏的情况
+        #     if action == "destroy":
+        #         # 更新游戏状态
+        #         game_state.destroy_obstacle(target_pos)
+        #         # 重建图
+        #         graph = build_graph(GRID_SIZE, game_state.obstacles)
+        #
+        #     # 处理僵尸移动
+        #     if action == "move":
+        #         zombie.pos = target_pos
+        #
+        #     zombie.move_cooldown = zombie.speed
+        #
+        #     # 检查僵尸是否抓到玩家
+        #     if zombie.pos == player.pos:
+        #         game_result = "fail"
+        #         game_running = False
+        #
+        # # 检查胜利条件（收集所有道具）
+        # if not game_state.items and game_result is None:
+        #     game_result = "success"
+        #     game_running = False
 
         # ...游戏内容渲染...
         render_game(screen, game_state, player, zombies)
