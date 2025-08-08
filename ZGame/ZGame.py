@@ -289,7 +289,7 @@ def show_pause_menu(screen, background_surf):
     spacing = 16
     start_y = panel.top + 120
     btns = []
-    labels = [("CONTINUE  (ESC)", "continue"),
+    labels = [("CONTINUE", "continue"),
               ("RESTART", "restart"),
               ("SETTINGS", "settings"),
               ("BACK TO HOMEPAGE", "home")]
