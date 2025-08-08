@@ -479,7 +479,7 @@ def show_start_menu(screen: pygame.Surface) -> bool:
     background = pygame.transform.scale(background, (WINDOW_SIZE, TOTAL_HEIGHT))
 
     start_button_img = pygame.image.load("assets/start_button.png").convert_alpha()
-    button_width, button_height = start_button_img.get_size() 
+    button_width, button_height = start_button_img.get_size()
 
     # 居中摆放按钮
     start_button_rect = start_button_img.get_rect(center=(WINDOW_SIZE // 2, TOTAL_HEIGHT // 2))

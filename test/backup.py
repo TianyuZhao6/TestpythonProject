@@ -475,10 +475,10 @@ def generate_game_entities(grid_size: int, obstacle_count: int, item_count: int,
 
 def show_start_menu(screen: pygame.Surface) -> bool:
     """显示开始菜单，点击START图像按钮后进入游戏"""
-    background = pygame.image.load("start_bg.png").convert()
+    background = pygame.image.load("assets/start_bg.png").convert()
     background = pygame.transform.scale(background, (WINDOW_SIZE, TOTAL_HEIGHT))
 
-    start_button_img = pygame.image.load("start_button.png").convert_alpha()
+    start_button_img = pygame.image.load("assets/start_button.png").convert_alpha()
     button_width, button_height = start_button_img.get_size()
 
     # 居中摆放按钮
@@ -703,8 +703,8 @@ def main(config, zombie_cards_collected: Set[str]) -> Tuple[str, Optional[str]]:
     screen = pygame.display.set_mode((WINDOW_SIZE, TOTAL_HEIGHT))
     clock = pygame.time.Clock()
 
-    restart_img = pygame.image.load("restart.png").convert_alpha()
-    next_img = pygame.image.load("next.png").convert_alpha()
+    restart_img = pygame.image.load("assets/restart.png").convert_alpha()
+    next_img = pygame.image.load("assets/next.png").convert_alpha()
     icon_size = 64
     restart_img = pygame.transform.smoothscale(restart_img, (icon_size, icon_size))
     next_img = pygame.transform.smoothscale(next_img, (icon_size, icon_size))
