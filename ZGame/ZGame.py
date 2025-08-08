@@ -84,6 +84,22 @@ def door_transition(screen, color=(0,0,0), duration=500):
         if progress >= 1: break
         clock.tick(60)
 
+
+def draw_settings_gear(screen, x, y):
+    """Draw a simple gear icon at (x,y) top-left; returns its rect."""
+    rect = pygame.Rect(x, y, 32, 24)
+    # outer
+    pygame.draw.rect(screen, (50,50,50), rect, 2)
+    # gear: circle + spokes
+    cx, cy = x + 16, y + 12
+    pygame.draw.circle(screen, (200,200,200), (cx, cy), 8, 2)
+    pygame.draw.circle(screen, (200,200,200), (cx, cy), 3)
+    for ang in (0, 60, 120, 180, 240, 300):
+        rad = math.radians(ang)
+        x1 = int(cx + 10 * math.cos(rad)); y1 = int(cy + 10 * math.sin(rad))
+        x2 = int(cx + 14 * math.cos(rad)); y2 = int(cy + 14 * math.sin(rad))
+        pygame.draw.line(screen, (200,200,200), (x1,y1), (x2,y2), 2)
+    return rect
 def show_start_menu(screen):
     clock = pygame.time.Clock()
     title_font = pygame.font.SysFont(None, 64)
@@ -102,12 +118,17 @@ def show_start_menu(screen):
         start_rect = draw_button(screen, "START", (VIEW_W//2-200, 260))
         how_rect = draw_button(screen, "HOW TO PLAY", (VIEW_W//2+20, 260))
         exit_rect = draw_button(screen, "EXIT", (VIEW_W//2-90, 340))
+        gear_rect = draw_settings_gear(screen, VIEW_W-44, 8)
+        pygame.display.flip()
+
         pygame.display.flip()
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit(); sys.exit()
             if event.type == pygame.MOUSEBUTTONDOWN:
+                if gear_rect.collidepoint(event.pos):
+                    show_settings_popup(screen, screen.copy())
                 if start_rect.collidepoint(event.pos):
                     door_transition(screen)
                     return True
@@ -139,6 +160,22 @@ def show_help(screen):
         pygame.display.flip()
         for event in pygame.event.get():
             if event.type == pygame.QUIT: pygame.quit(); sys.exit()
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                # gear click detection (top-right HUD)
+                hud_gear = pygame.Rect(VIEW_W-44, 8, 32, 24)
+                if hud_gear.collidepoint(event.pos):
+                    bg = pygame.display.get_surface().copy()
+                    # open settings first, then show pause menu (settings pre-selected feel)
+                    show_settings_popup(screen, bg)
+                    pause_choice = show_pause_menu(screen, bg)
+                    if pause_choice == 'continue':
+                        pass
+                    elif pause_choice == 'restart':
+                        return 'restart', config.get('reward', None), bg
+                    elif pause_choice == 'settings':
+                        show_settings_popup(screen, bg)
+                    elif pause_choice == 'home':
+                        return 'home', config.get('reward', None), bg
             if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
                 door_transition(screen); return
             if event.type == pygame.MOUSEBUTTONDOWN and back.collidepoint(event.pos):
@@ -157,6 +194,22 @@ def show_fail_screen(screen, background_surf):
     while True:
         for event in pygame.event.get():
             if event.type == pygame.QUIT: pygame.quit(); sys.exit()
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                # gear click detection (top-right HUD)
+                hud_gear = pygame.Rect(VIEW_W-44, 8, 32, 24)
+                if hud_gear.collidepoint(event.pos):
+                    bg = pygame.display.get_surface().copy()
+                    # open settings first, then show pause menu (settings pre-selected feel)
+                    show_settings_popup(screen, bg)
+                    pause_choice = show_pause_menu(screen, bg)
+                    if pause_choice == 'continue':
+                        pass
+                    elif pause_choice == 'restart':
+                        return 'restart', config.get('reward', None), bg
+                    elif pause_choice == 'settings':
+                        show_settings_popup(screen, bg)
+                    elif pause_choice == 'home':
+                        return 'home', config.get('reward', None), bg
             if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
                 door_transition(screen); return
             if event.type == pygame.MOUSEBUTTONDOWN:
@@ -186,6 +239,22 @@ def show_success_screen(screen, background_surf, reward_choices):
     while True:
         for event in pygame.event.get():
             if event.type == pygame.QUIT: pygame.quit(); sys.exit()
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                # gear click detection (top-right HUD)
+                hud_gear = pygame.Rect(VIEW_W-44, 8, 32, 24)
+                if hud_gear.collidepoint(event.pos):
+                    bg = pygame.display.get_surface().copy()
+                    # open settings first, then show pause menu (settings pre-selected feel)
+                    show_settings_popup(screen, bg)
+                    pause_choice = show_pause_menu(screen, bg)
+                    if pause_choice == 'continue':
+                        pass
+                    elif pause_choice == 'restart':
+                        return 'restart', config.get('reward', None), bg
+                    elif pause_choice == 'settings':
+                        show_settings_popup(screen, bg)
+                    elif pause_choice == 'home':
+                        return 'home', config.get('reward', None), bg
             if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
                 door_transition(screen); return
             if event.type == pygame.MOUSEBUTTONDOWN:
@@ -196,66 +265,110 @@ def show_success_screen(screen, background_surf, reward_choices):
 
 
 
+
 def show_pause_menu(screen, background_surf):
-    dim = pygame.Surface((VIEW_W, VIEW_H)); dim.set_alpha(160); dim.fill((0,0,0))
-    screen.blit(pygame.transform.smoothscale(background_surf, (VIEW_W, VIEW_H)), (0,0))
-    screen.blit(dim, (0,0))
-    title = pygame.font.SysFont(None, 72).render("Paused", True, (230,230,230))
-    screen.blit(title, title.get_rect(center=(VIEW_W//2, 120)))
-    y = 210
-    btn_continue = draw_button(screen, "CONTINUE  (ESC)", (VIEW_W//2-200, y)); y += 70
-    btn_restart  = draw_button(screen, "RESTART", (VIEW_W//2-200, y)); y += 70
-    btn_settings = draw_button(screen, "SETTINGS", (VIEW_W//2-200, y)); y += 70
-    btn_home     = draw_button(screen, "BACK TO HOMEPAGE", (VIEW_W//2-200, y))
+    dim = pygame.Surface((VIEW_W, VIEW_H), pygame.SRCALPHA)
+    dim.fill((0, 0, 0, 170))  # semi-transparent
+    # Use latest frame if given, otherwise current screen
+    bg_scaled = pygame.transform.smoothscale(background_surf, (VIEW_W, VIEW_H))
+    screen.blit(bg_scaled, (0, 0))
+    screen.blit(dim, (0, 0))
+
+    # Panel
+    panel_w, panel_h = min(520, VIEW_W - 80), min(420, VIEW_H - 160)
+    panel = pygame.Rect(0, 0, panel_w, panel_h)
+    panel.center = (VIEW_W // 2, VIEW_H // 2)
+    pygame.draw.rect(screen, (30, 30, 30), panel, border_radius=16)
+    pygame.draw.rect(screen, (60, 60, 60), panel, width=3, border_radius=16)
+
+    title = pygame.font.SysFont(None, 72).render("Paused", True, (230, 230, 230))
+    screen.blit(title, title.get_rect(center=(panel.centerx, panel.top + 70)))
+
+    # Buttons stacked in panel
+    btn_w, btn_h = 300, 56
+    spacing = 16
+    start_y = panel.top + 120
+    btns = []
+    labels = [("CONTINUE  (ESC)", "continue"),
+              ("RESTART", "restart"),
+              ("SETTINGS", "settings"),
+              ("BACK TO HOMEPAGE", "home")]
+    for i, (label, tag) in enumerate(labels):
+        x = panel.centerx - btn_w // 2
+        y = start_y + i * (btn_h + spacing)
+        rect = pygame.Rect(x, y, btn_w, btn_h)
+        # draw
+        pygame.draw.rect(screen, (15, 15, 15), rect.inflate(6, 6), border_radius=10)
+        pygame.draw.rect(screen, (50, 50, 50), rect, border_radius=10)
+        txt = pygame.font.SysFont(None, 32).render(label, True, (235, 235, 235))
+        screen.blit(txt, txt.get_rect(center=rect.center))
+        btns.append((rect, tag))
+
     pygame.display.flip()
+
     while True:
         for event in pygame.event.get():
-            if event.type == pygame.QUIT: pygame.quit(); sys.exit()
+            if event.type == pygame.QUIT:
+                pygame.quit(); sys.exit()
             if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
-                door_transition(screen); return
+                return "continue"
             if event.type == pygame.MOUSEBUTTONDOWN:
-                if btn_continue.collidepoint(event.pos):
-                    return "continue"
-                if btn_restart.collidepoint(event.pos):
-                    return "restart"
-                if btn_settings.collidepoint(event.pos):
-                    return "settings"
-                if btn_home.collidepoint(event.pos):
-                    return "home"
+                for rect, tag in btns:
+                    if rect.collidepoint(event.pos):
+                        return tag
+
 
 
 def show_settings_popup(screen, background_surf):
     global FX_VOLUME, BGM_VOLUME
-    dim = pygame.Surface((VIEW_W, VIEW_H)); dim.set_alpha(160); dim.fill((0,0,0))
-    title = pygame.font.SysFont(None, 56).render("Settings", True, (230,230,230))
-    font  = pygame.font.SysFont(None, 30)
+    dim = pygame.Surface((VIEW_W, VIEW_H), pygame.SRCALPHA)
+    dim.fill((0, 0, 0, 170))
+    bg_scaled = pygame.transform.smoothscale(background_surf, (VIEW_W, VIEW_H))
+    screen.blit(bg_scaled, (0, 0))
+    screen.blit(dim, (0, 0))
+
+    panel_w, panel_h = min(520, VIEW_W - 80), min(360, VIEW_H - 160)
+    panel = pygame.Rect(0, 0, panel_w, panel_h)
+    panel.center = (VIEW_W // 2, VIEW_H // 2)
+    pygame.draw.rect(screen, (30, 30, 30), panel, border_radius=16)
+    pygame.draw.rect(screen, (60, 60, 60), panel, width=3, border_radius=16)
+
+    title = pygame.font.SysFont(None, 56).render("Settings", True, (230, 230, 230))
+    screen.blit(title, title.get_rect(center=(panel.centerx, panel.top + 48)))
+    font = pygame.font.SysFont(None, 30)
 
     def draw_slider(label, value, top_y):
-        screen.blit(font.render(f"{label}: {value}", True, (230,230,230)), (VIEW_W//2-220, top_y))
-        bar = pygame.Rect(VIEW_W//2-220, top_y+28, 320, 10)
+        screen.blit(font.render(f"{label}: {value}", True, (230,230,230)), (panel.left + 40, top_y))
+        bar = pygame.Rect(panel.left + 40, top_y + 26, panel_w - 80, 10)
         knob_x = bar.x + int((value/100)*bar.width)
-        pygame.draw.rect(screen, (80,80,80), bar)
+        pygame.draw.rect(screen, (80,80,80), bar, border_radius=6)
         pygame.draw.circle(screen, (220,220,220), (knob_x, bar.y+5), 8)
         return bar
 
     fx_val = FX_VOLUME
     bgm_val = BGM_VOLUME
 
-    while True:
-        screen.blit(pygame.transform.smoothscale(background_surf, (VIEW_W, VIEW_H)), (0,0))
-        screen.blit(dim, (0,0))
-        screen.blit(title, title.get_rect(center=(VIEW_W//2, 110)))
-        fx_bar  = draw_slider("Effects Volume", fx_val, 220)
-        bgm_bar = draw_slider("BGM Volume", bgm_val, 270)
-        close   = draw_button(screen, "CLOSE", (VIEW_W//2-90, 340))
-        pygame.display.flip()
+    fx_bar  = draw_slider("Effects Volume", fx_val, panel.top + 110)
+    bgm_bar = draw_slider("BGM Volume", bgm_val, panel.top + 160)
 
+    # Close button
+    btn_w, btn_h = 200, 56
+    close = pygame.Rect(0,0,btn_w,btn_h)
+    close.center = (panel.centerx, panel.bottom - 50)
+    pygame.draw.rect(screen, (15,15,15), close.inflate(6,6), border_radius=10)
+    pygame.draw.rect(screen, (50,50,50), close, border_radius=10)
+    ctxt = pygame.font.SysFont(None, 32).render("CLOSE", True, (235,235,235))
+    screen.blit(ctxt, ctxt.get_rect(center=close.center))
+
+    pygame.display.flip()
+
+    while True:
         for event in pygame.event.get():
             if event.type == pygame.QUIT: pygame.quit(); sys.exit()
             if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
-                door_transition(screen); return
+                return "close"
             if event.type == pygame.MOUSEBUTTONDOWN:
-                mx,my = event.pos
+                mx, my = event.pos
                 for which, bar in (('fx', fx_bar), ('bgm', bgm_bar)):
                     if bar.collidepoint((mx,my)):
                         val = int(((mx - bar.x)/bar.width)*100); val = max(0, min(100, val))
@@ -579,6 +692,8 @@ def render_game(screen: pygame.Surface, game_state, player: Player, zombies: Lis
     font = pygame.font.SysFont(None, 28)
     item_txt = font.render(f"ITEMS: {len(game_state.items)}", True, (255, 255, 80))
     screen.blit(item_txt, (12, 12))
+    # settings icon (HUD)
+    gear_rect = draw_settings_gear(screen, VIEW_W-44, 8)
 
     # grid in view
     start_x = max(0, cam_x // CELL_SIZE)
@@ -664,6 +779,22 @@ def main_run_level(config, chosen_zombie_type:str) -> Tuple[str, Optional[str], 
         dt = clock.tick(60) / 1000.0
         for event in pygame.event.get():
             if event.type == pygame.QUIT: pygame.quit(); sys.exit()
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                # gear click detection (top-right HUD)
+                hud_gear = pygame.Rect(VIEW_W-44, 8, 32, 24)
+                if hud_gear.collidepoint(event.pos):
+                    bg = pygame.display.get_surface().copy()
+                    # open settings first, then show pause menu (settings pre-selected feel)
+                    show_settings_popup(screen, bg)
+                    pause_choice = show_pause_menu(screen, bg)
+                    if pause_choice == 'continue':
+                        pass
+                    elif pause_choice == 'restart':
+                        return 'restart', config.get('reward', None), bg
+                    elif pause_choice == 'settings':
+                        show_settings_popup(screen, bg)
+                    elif pause_choice == 'home':
+                        return 'home', config.get('reward', None), bg
             if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
                 pause_choice = show_pause_menu(screen, last_frame or render_game(screen, game_state, player, zombies))
                 if pause_choice == 'continue':
@@ -717,11 +848,14 @@ def select_zombie_screen(screen, owned_cards:List[str]) -> str:
 
 # ==================== 入口 ====================
 if __name__ == "__main__":
+    import os
+    os.environ['SDL_VIDEO_CENTERED'] = '0'
+    os.environ['SDL_VIDEO_WINDOW_POS'] = '0,0'
     pygame.init()
     info = pygame.display.Info()
-    screen = pygame.display.set_mode((info.current_w, info.current_h), pygame.FULLSCREEN)
+    # Borderless fullscreen to avoid display mode flicker
+    screen = pygame.display.set_mode((info.current_w, info.current_h), pygame.NOFRAME)
     pygame.display.set_caption(GAME_TITLE)
-    # override viewport globals
     VIEW_W, VIEW_H = info.current_w, info.current_h
 
     # Start menu
