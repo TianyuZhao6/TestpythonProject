@@ -7,6 +7,11 @@ from queue import PriorityQueue
 from typing import Dict, List, Set, Tuple, Optional
 
 # ==================== 游戏常量配置 ====================
+# NOTE: Keep design notes & TODOs below; do not delete when refactoring.
+# - Card system UI polish (later pass)
+# - Sprite/animation pipeline to be added
+# - Balance obstacle density via OBSTACLE_DENSITY/DECOR_DENSITY
+
 GAME_TITLE = "Neuroscape: Mind Runner"
 INFO_BAR_HEIGHT = 40
 GRID_SIZE = 36
@@ -19,6 +24,10 @@ VIEW_H = TOTAL_HEIGHT
 
 OBSTACLE_HEALTH = 20
 MAIN_BLOCK_HEALTH = 40
+# --- map fill tuning ---
+OBSTACLE_DENSITY = 0.14  # proportion of tiles to become obstacles (including clusters)
+DECOR_DENSITY = 0.06     # proportion of tiles to place non-blocking decorations
+MIN_ITEMS = 8            # ensure enough items on larger maps
 DESTRUCTIBLE_RATIO = 0.3
 PLAYER_SPEED = 5
 ZOMBIE_SPEED = 2
@@ -339,10 +348,16 @@ def reconstruct_path(came_from: Dict, start: Tuple[int, int], goal: Tuple[int, i
     path.append(start); path.reverse(); return path
 
 # ==================== 游戏初始化函数 ====================
+
 def generate_game_entities(grid_size: int, obstacle_count: int, item_count: int, zombie_count: int, main_block_hp: int):
+    """
+    Generate entities with map-fill: obstacle clusters, ample items, and non-blocking decorations.
+    NOTE: keeps logic readable for future tweaks.
+    """
     all_positions = [(x, y) for x in range(grid_size) for y in range(grid_size)]
     corners = [(0, 0), (0, grid_size - 1), (grid_size - 1, 0), (grid_size - 1, grid_size - 1)]
     forbidden = set(corners)
+
     def pick_valid_positions(min_distance: int, count: int):
         empty = [p for p in all_positions if p not in forbidden]
         while True:
@@ -350,6 +365,7 @@ def generate_game_entities(grid_size: int, obstacle_count: int, item_count: int,
             player_pos, zombies = picks[0], picks[1:]
             if all(abs(player_pos[0] - z[0]) + abs(player_pos[1] - z[1]) >= min_distance for z in zombies):
                 return player_pos, zombies
+
     # center spawn if possible
     center_pos = (grid_size//2, grid_size//2)
     if center_pos not in forbidden:
@@ -360,26 +376,71 @@ def generate_game_entities(grid_size: int, obstacle_count: int, item_count: int,
         player_pos, zombie_pos_list = pick_valid_positions(min_distance=5, count=zombie_count)
     forbidden |= {player_pos}; forbidden |= set(zombie_pos_list)
 
+    # main item + main block
     main_item_candidates = [p for p in all_positions if p not in forbidden and is_not_edge(p, grid_size)]
     main_item_pos = random.choice(main_item_candidates); forbidden.add(main_item_pos)
-
     obstacles = {main_item_pos: MainBlock(main_item_pos[0], main_item_pos[1], health=main_block_hp)}
 
-    rest_obstacle_candidates = [p for p in all_positions if p not in forbidden]
-    rest_count = obstacle_count - 1
-    rest_obstacle_positions = random.sample(rest_obstacle_candidates, rest_count)
-    destructible_count = int(rest_count * DESTRUCTIBLE_RATIO)
-    for pos in rest_obstacle_positions[:destructible_count]:
-        obstacles[pos] = Obstacle(pos[0], pos[1], "Destructible", health=OBSTACLE_HEALTH)
-    for pos in rest_obstacle_positions[destructible_count:]:
-        obstacles[pos] = Obstacle(pos[0], pos[1], "Indestructible")
+    # --- obstacle fill with clusters ---
+    area = grid_size * grid_size
+    target_obstacles = max(obstacle_count, int(area * OBSTACLE_DENSITY))
+    rest_needed = max(0, target_obstacles - 1)  # minus main block
+    # seed positions away from forbidden
+    base_candidates = [p for p in all_positions if p not in forbidden and p not in obstacles]
+    cluster_seeds = random.sample(base_candidates, k=max(1, rest_needed // 6))
+    placed = 0
+    # fill clusters around seeds to avoid empty feel
+    for seed in cluster_seeds:
+        if placed >= rest_needed: break
+        # small cluster size 3-6
+        cluster_size = random.randint(3, 6)
+        wave = [seed]
+        visited = set()
+        while wave and placed < rest_needed and len(visited) < cluster_size:
+            cur = wave.pop()
+            if cur in visited or cur in forbidden or cur in obstacles: 
+                continue
+            visited.add(cur)
+            # type assignment
+            if random.random() < 0.65:
+                obstacles[cur] = Obstacle(cur[0], cur[1], "Indestructible")
+            else:
+                obstacles[cur] = Obstacle(cur[0], cur[1], "Destructible", health=OBSTACLE_HEALTH)
+            placed += 1
+            # neighbors (4-dir)
+            nx, ny = cur
+            neigh = [(nx+1,ny),(nx-1,ny),(nx,ny+1),(nx,ny-1)]
+            random.shuffle(neigh)
+            for nb in neigh:
+                if 0 <= nb[0] < grid_size and 0 <= nb[1] < grid_size and nb not in visited:
+                    wave.append(nb)
+
+    # if still short, place random scattered obstacles
+    if placed < rest_needed:
+        rest_candidates = [p for p in base_candidates if p not in obstacles]
+        random.shuffle(rest_candidates)
+        for pos in rest_candidates[:(rest_needed - placed)]:
+            typ = "Indestructible" if random.random() < 0.5 else "Destructible"
+            hp = OBSTACLE_HEALTH if typ == "Destructible" else None
+            obstacles[pos] = Obstacle(pos[0], pos[1], typ, health=hp)
+
     forbidden |= set(obstacles.keys())
 
+    # --- items: ensure minimum count on large maps ---
+    item_target = max(item_count, MIN_ITEMS, grid_size // 2)
     item_candidates = [p for p in all_positions if p not in forbidden]
-    other_items = random.sample(item_candidates, item_count - 1)
+    other_items = random.sample(item_candidates, max(0, item_target - 1))
     items = [Item(pos[0], pos[1]) for pos in other_items]
     items.append(Item(main_item_pos[0], main_item_pos[1], is_main=True))
-    return obstacles, items, player_pos, zombie_pos_list, [main_item_pos]
+
+    # --- decorations (non-colliding) ---
+    decor_target = int(area * DECOR_DENSITY)
+    decor_candidates = [p for p in all_positions if p not in forbidden and p not in set((i.x, i.y) for i in items)]
+    random.shuffle(decor_candidates)
+    decorations = decor_candidates[:decor_target]
+
+    return obstacles, items, player_pos, zombie_pos_list, [main_item_pos], decorations
+
 
 def build_graph(grid_size: int, obstacles: Dict[Tuple[int, int], Obstacle]) -> Graph:
     graph = Graph()
@@ -399,11 +460,13 @@ def build_graph(grid_size: int, obstacles: Dict[Tuple[int, int], Obstacle]) -> G
 
 # ==================== 新增游戏状态类 ====================
 class GameState:
-    def __init__(self, obstacles: Dict, items: Set, main_item_pos: List[Tuple[int, int]]):
+    def __init__(self, obstacles: Dict, items: Set, main_item_pos: List[Tuple[int, int]], decorations: list):
         self.obstacles = obstacles
         self.items = items
         self.destructible_count = self.count_destructible_obstacles()
         self.main_item_pos = main_item_pos
+        # non-colliding visual fillers
+        self.decorations = decorations  # list[Tuple[int,int]] grid coords
     def count_destructible_obstacles(self) -> int:
         return sum(1 for obs in self.obstacles.values() if obs.type == "Destructible")
     def collect_item(self, player_rect):
@@ -443,6 +506,13 @@ def render_game(screen: pygame.Surface, game_state, player: Player, zombies: Lis
         for x in range(start_x, end_x):
             rect = pygame.Rect(x * CELL_SIZE - cam_x, y * CELL_SIZE + INFO_BAR_HEIGHT - cam_y, CELL_SIZE, CELL_SIZE)
             pygame.draw.rect(screen, (50, 50, 50), rect, 1)
+
+    # decorations (non-colliding visual fillers)
+    for gx, gy in getattr(game_state, 'decorations', []):
+        # draw small rubble/grass
+        cx = gx*CELL_SIZE + CELL_SIZE//2 - cam_x
+        cy = gy*CELL_SIZE + CELL_SIZE//2 + INFO_BAR_HEIGHT - cam_y
+        pygame.draw.circle(screen, (70, 80, 70), (cx, cy), max(2, CELL_SIZE//8))
 
     # items
     for item in game_state.items:
@@ -484,7 +554,7 @@ def main_run_level(config, chosen_zombie_type:str) -> Tuple[str, Optional[str], 
     screen = pygame.display.get_surface()
     clock = pygame.time.Clock()
 
-    obstacles, items, player_start, zombie_starts, main_item_list = generate_game_entities(
+    obstacles, items, player_start, zombie_starts, main_item_list, decorations = generate_game_entities(
         grid_size=GRID_SIZE,
         obstacle_count=config["obstacle_count"],
         item_count=config["item_count"],
@@ -492,7 +562,7 @@ def main_run_level(config, chosen_zombie_type:str) -> Tuple[str, Optional[str], 
         main_block_hp=config["block_hp"]
     )
 
-    game_state = GameState(obstacles, items, main_item_list)
+    game_state = GameState(obstacles, items, main_item_list, decorations)
     player = Player(player_start, speed=PLAYER_SPEED)
 
     ztype_map = {
