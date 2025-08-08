@@ -117,8 +117,7 @@ def show_help(screen):
             "Breakable yellow blocks block the final fragment.",
             "Zombies chase you. Touch = defeat.",
             "After each win: pick a zombie card as reward.",
-            "Before the next level: choose which zombie type spawns.",
-            "Transitions use the classic 'two doors' animation."
+            "Before the next level: choose which zombie type spawns."
         ]
         y=100
         for s in lines:
