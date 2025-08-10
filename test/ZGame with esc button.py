@@ -2,8 +2,6 @@ import sys
 import pygame
 import math
 import random
-import json
-import os
 from queue import PriorityQueue
 from typing import Dict, List, Set, Tuple, Optional
 
@@ -55,54 +53,6 @@ DIRECTIONS = {
     pygame.K_s: (0, 1),
 }
 
-# ==================== Save/Load Helpers ====================
-SAVE_FILE = os.path.join(os.path.dirname(__file__) if '__file__' in globals() else '.', 'savegame.json')
-
-
-def save_progress(current_level: int, zombie_cards_collected: List[str]) -> None:
-    """Persist minimal progress so player can CONTINUE later (resume from the start of the same level)."""
-    data = {
-        "current_level": int(current_level),
-        "zombie_cards_collected": list(zombie_cards_collected),
-        "version": 1
-    }
-    try:
-        with open(SAVE_FILE, 'w', encoding='utf-8') as f:
-            json.dump(data, f)
-    except Exception as e:
-        # Non-fatal: just print to stderr for debugging
-        print(f"[Save] Failed to write save file: {e}", file=sys.stderr)
-
-
-def load_progress() -> Optional[dict]:
-    """Load progress if present; returns dict or None."""
-    try:
-        if not os.path.exists(SAVE_FILE):
-            return None
-        with open(SAVE_FILE, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-        # Basic sanity
-        if not isinstance(data, dict):
-            return None
-        data.setdefault("current_level", 0)
-        data.setdefault("zombie_cards_collected", [])
-        return data
-    except Exception as e:
-        print(f"[Save] Failed to read save file: {e}", file=sys.stderr)
-        return None
-
-
-def has_save() -> bool:
-    return os.path.exists(SAVE_FILE)
-
-
-def clear_save() -> None:
-    try:
-        if os.path.exists(SAVE_FILE):
-            os.remove(SAVE_FILE)
-    except Exception as e:
-        print(f"[Save] Failed to delete save file: {e}", file=sys.stderr)
-
 
 # ==================== UI Helpers ====================
 def draw_button(screen, label, pos, size=(180, 56), bg=(40, 40, 40), fg=(240, 240, 240), border=(15, 15, 15)):
@@ -148,14 +98,15 @@ def draw_settings_gear(screen, x, y):
     pygame.draw.circle(screen, (200, 200, 200), (cx, cy), 3)
     for ang in (0, 60, 120, 180, 240, 300):
         rad = math.radians(ang)
-        x1 = int(cx + 10 * math.cos(rad)); y1 = int(cy + 10 * math.sin(rad))
-        x2 = int(cx + 14 * math.cos(rad)); y2 = int(cy + 14 * math.sin(rad))
+        x1 = int(cx + 10 * math.cos(rad));
+        y1 = int(cy + 10 * math.sin(rad))
+        x2 = int(cx + 14 * math.cos(rad));
+        y2 = int(cy + 14 * math.sin(rad))
         pygame.draw.line(screen, (200, 200, 200), (x1, y1), (x2, y2), 2)
     return rect
 
 
 def show_start_menu(screen):
-    """Return a tuple ('new', None) or ('continue', save_data) based on player's choice."""
     clock = pygame.time.Clock()
     title_font = pygame.font.SysFont(None, 64)
     subtitle_font = pygame.font.SysFont(None, 24)
@@ -170,36 +121,27 @@ def show_start_menu(screen):
         sub = subtitle_font.render("A pixel roguelite of memory and monsters", True, (160, 160, 150))
         screen.blit(sub, sub.get_rect(center=(VIEW_W // 2, 180)))
         # buttons
-        left_x = VIEW_W // 2 - 290
-        right_x = VIEW_W // 2 + 20
-        start_rect = draw_button(screen, "START NEW", (left_x, 260))
-        how_rect = draw_button(screen, "HOW TO PLAY", (right_x, 260))
-        y2 = 340
-        if has_save():
-            cont_rect = draw_button(screen, "CONTINUE", (left_x, y2))
-            exit_rect = draw_button(screen, "EXIT", (right_x, y2))
-        else:
-            cont_rect = None
-            exit_rect = draw_button(screen, "EXIT", (VIEW_W // 2 - 90, y2))
+        start_rect = draw_button(screen, "START", (VIEW_W // 2 - 200, 260))
+        how_rect = draw_button(screen, "HOW TO PLAY", (VIEW_W // 2 + 20, 260))
+        exit_rect = draw_button(screen, "EXIT", (VIEW_W // 2 - 90, 340))
         gear_rect = draw_settings_gear(screen, VIEW_W - 44, 8)
+        pygame.display.flip()
+
         pygame.display.flip()
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
-                pygame.quit(); sys.exit()
+                pygame.quit();
+                sys.exit()
             if event.type == pygame.MOUSEBUTTONDOWN:
                 if gear_rect.collidepoint(event.pos):
                     show_settings_popup(screen, screen.copy())
                 if start_rect.collidepoint(event.pos):
                     door_transition(screen)
-                    return ("new", None)
-                if cont_rect and cont_rect.collidepoint(event.pos):
-                    data = load_progress()
-                    if data:
-                        door_transition(screen)
-                        return ("continue", data)
+                    return True
                 if exit_rect.collidepoint(event.pos):
-                    pygame.quit(); sys.exit()
+                    pygame.quit();
+                    sys.exit()
                 if how_rect.collidepoint(event.pos):
                     show_help(screen)
         clock.tick(60)
@@ -222,7 +164,8 @@ def show_help(screen):
         ]
         y = 100
         for s in lines:
-            screen.blit(font.render(s, True, (200, 200, 200)), (40, y)); y += 36
+            screen.blit(font.render(s, True, (200, 200, 200)), (40, y));
+            y += 36
         back = draw_button(screen, "BACK", (VIEW_W // 2 - 90, VIEW_H - 120))
         pygame.display.flip()
         for event in pygame.event.get():
@@ -244,14 +187,18 @@ def show_help(screen):
                     elif pause_choice == 'home':
                         return 'home', config.get('reward', None), bg
             if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
-                door_transition(screen); return
+                door_transition(screen);
+                return
             if event.type == pygame.MOUSEBUTTONDOWN and back.collidepoint(event.pos):
-                door_transition(screen); return
+                door_transition(screen);
+                return
         clock.tick(60)
 
 
 def show_fail_screen(screen, background_surf):
-    dim = pygame.Surface((VIEW_W, VIEW_H)); dim.set_alpha(180); dim.fill((0, 0, 0))
+    dim = pygame.Surface((VIEW_W, VIEW_H));
+    dim.set_alpha(180);
+    dim.fill((0, 0, 0))
     screen.blit(pygame.transform.smoothscale(background_surf, (VIEW_W, VIEW_H)), (0, 0))
     screen.blit(dim, (0, 0))
     title = pygame.font.SysFont(None, 80).render("YOU WERE CORRUPTED!", True, (255, 60, 60))
@@ -279,14 +226,17 @@ def show_fail_screen(screen, background_surf):
                     elif pause_choice == 'home':
                         return 'home', config.get('reward', None), bg
             if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
-                door_transition(screen); return
+                door_transition(screen);
+                return
             if event.type == pygame.MOUSEBUTTONDOWN:
                 if retry.collidepoint(event.pos): door_transition(screen); return "retry"
                 if home.collidepoint(event.pos): door_transition(screen); return "home"
 
 
 def show_success_screen(screen, background_surf, reward_choices):
-    dim = pygame.Surface((VIEW_W, VIEW_H)); dim.set_alpha(150); dim.fill((0, 0, 0))
+    dim = pygame.Surface((VIEW_W, VIEW_H));
+    dim.set_alpha(150);
+    dim.fill((0, 0, 0))
     screen.blit(pygame.transform.smoothscale(background_surf, (VIEW_W, VIEW_H)), (0, 0))
     screen.blit(dim, (0, 0))
     title = pygame.font.SysFont(None, 80).render("MEMORY RESTORED!", True, (0, 255, 120))
@@ -325,12 +275,14 @@ def show_success_screen(screen, background_surf, reward_choices):
                     elif pause_choice == 'home':
                         return 'home', config.get('reward', None), bg
             if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
-                door_transition(screen); return
+                door_transition(screen);
+                return
             if event.type == pygame.MOUSEBUTTONDOWN:
                 for rect, card in card_rects:
                     if rect.collidepoint(event.pos): chosen = card
                 if next_btn.collidepoint(event.pos) and (chosen or len(reward_choices) == 0):
-                    door_transition(screen); return chosen
+                    door_transition(screen);
+                    return chosen
 
 
 def show_pause_menu(screen, background_surf):
@@ -358,7 +310,7 @@ def show_pause_menu(screen, background_surf):
               ("RESTART", "restart"),
               ("SETTINGS", "settings"),
               ("BACK TO HOMEPAGE", "home"),
-              ("EXIT GAME (Save & Quit)", "exit")]
+              ("EXIT GAME", "exit")]
     for i, (label, tag) in enumerate(labels):
         x = panel.centerx - btn_w // 2
         y = start_y + i * (btn_h + spacing)
@@ -377,7 +329,8 @@ def show_pause_menu(screen, background_surf):
     while True:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
-                pygame.quit(); sys.exit()
+                pygame.quit();
+                sys.exit()
             if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
                 return "continue"
             if event.type == pygame.MOUSEBUTTONDOWN:
@@ -438,7 +391,8 @@ def show_settings_popup(screen, background_surf):
                 mx, my = event.pos
                 for which, bar in (('fx', fx_bar), ('bgm', bgm_bar)):
                     if bar.collidepoint((mx, my)):
-                        val = int(((mx - bar.x) / bar.width) * 100); val = max(0, min(100, val))
+                        val = int(((mx - bar.x) / bar.width) * 100);
+                        val = max(0, min(100, val))
                         if which == 'fx': fx_val = val
                         if which == 'bgm': bgm_val = val
                 if close.collidepoint((mx, my)):
@@ -464,7 +418,8 @@ class Graph:
 
 class Obstacle:
     def __init__(self, x: int, y: int, obstacle_type: str, health: Optional[int] = None):
-        px = x * CELL_SIZE; py = y * CELL_SIZE + INFO_BAR_HEIGHT
+        px = x * CELL_SIZE;
+        py = y * CELL_SIZE + INFO_BAR_HEIGHT
         self.rect = pygame.Rect(px, py, CELL_SIZE, CELL_SIZE)
         self.type: str = obstacle_type
         self.health: Optional[int] = health
@@ -485,7 +440,9 @@ class MainBlock(Obstacle):
 
 class Item:
     def __init__(self, x: int, y: int, is_main=False):
-        self.x = x; self.y = y; self.is_main = is_main
+        self.x = x;
+        self.y = y;
+        self.is_main = is_main
         self.radius = CELL_SIZE // 3
         self.center = (self.x * CELL_SIZE + CELL_SIZE // 2, self.y * CELL_SIZE + CELL_SIZE // 2 + INFO_BAR_HEIGHT)
         self.rect = pygame.Rect(self.center[0] - self.radius, self.center[1] - self.radius, self.radius * 2,
@@ -494,8 +451,10 @@ class Item:
 
 class Player:
     def __init__(self, pos: Tuple[int, int], speed: int = PLAYER_SPEED):
-        self.x = pos[0] * CELL_SIZE; self.y = pos[1] * CELL_SIZE
-        self.speed = speed; self.size = CELL_SIZE - 6
+        self.x = pos[0] * CELL_SIZE;
+        self.y = pos[1] * CELL_SIZE
+        self.speed = speed;
+        self.size = CELL_SIZE - 6
         self.rect = pygame.Rect(self.x, self.y + INFO_BAR_HEIGHT, self.size, self.size)
 
     @property
@@ -514,19 +473,24 @@ class Player:
         rect_x = pygame.Rect(int(nx), int(self.y) + INFO_BAR_HEIGHT, self.size, self.size)
         for ob in obstacles.values():
             if rect_x.colliderect(ob.rect):
-                if dx > 0: nx = ob.rect.left - self.size
-                elif dx < 0: nx = ob.rect.right
+                if dx > 0:
+                    nx = ob.rect.left - self.size
+                elif dx < 0:
+                    nx = ob.rect.right
                 break
         self.x = max(0, min(nx, GRID_SIZE * CELL_SIZE - self.size))
         ny = self.y + dy * self.speed
         rect_y = pygame.Rect(int(self.x), int(ny) + INFO_BAR_HEIGHT, self.size, self.size)
         for ob in obstacles.values():
             if rect_y.colliderect(ob.rect):
-                if dy > 0: ny = ob.rect.top - self.size - INFO_BAR_HEIGHT
-                elif dy < 0: ny = ob.rect.bottom - INFO_BAR_HEIGHT
+                if dy > 0:
+                    ny = ob.rect.top - self.size - INFO_BAR_HEIGHT
+                elif dy < 0:
+                    ny = ob.rect.bottom - INFO_BAR_HEIGHT
                 break
         self.y = max(0, min(ny, GRID_SIZE * CELL_SIZE - self.size))
-        self.rect.x = int(self.x); self.rect.y = int(self.y) + INFO_BAR_HEIGHT
+        self.rect.x = int(self.x);
+        self.rect.y = int(self.y) + INFO_BAR_HEIGHT
 
     def draw(self, screen):
         pygame.draw.rect(screen, (0, 255, 0), self.rect)
@@ -535,8 +499,11 @@ class Player:
 class Zombie:
     def __init__(self, pos: Tuple[int, int], attack: int = ZOMBIE_ATTACK, speed: int = ZOMBIE_SPEED,
                  ztype: str = "basic"):
-        self.x = pos[0] * CELL_SIZE; self.y = pos[1] * CELL_SIZE
-        self.attack = attack; self.speed = speed; self.type = ztype
+        self.x = pos[0] * CELL_SIZE;
+        self.y = pos[1] * CELL_SIZE
+        self.attack = attack;
+        self.speed = speed;
+        self.type = ztype
         if ztype == "fast": self.speed = max(self.speed + 1, self.speed * 1.5)
         if ztype == "tank": self.attack = int(self.attack * 0.5)
         self.size = CELL_SIZE - 6
@@ -555,7 +522,8 @@ class Zombie:
         if self._spawn_elapsed < self.spawn_delay:
             self._spawn_elapsed += dt
             return
-        dx = player.x - self.x; dy = player.y - self.y
+        dx = player.x - self.x;
+        dy = player.y - self.y;
         speed = self.speed
         dirs = []
         if abs(dx) > abs(dy):
@@ -570,16 +538,21 @@ class Zombie:
                 if next_rect.colliderect(ob.rect):
                     if ob.type == "Destructible":
                         if self.attack_timer >= attack_interval:
-                            ob.health -= self.attack; self.attack_timer = 0
+                            ob.health -= self.attack;
+                            self.attack_timer = 0
                             if ob.health <= 0:
                                 gp = ob.grid_pos
                                 if gp in game_state.obstacles: del game_state.obstacles[gp]
-                        blocked = True; break
+                        blocked = True;
+                        break
                     elif ob.type == "Indestructible":
-                        blocked = True; break
+                        blocked = True;
+                        break
             if not blocked:
-                self.x += ddx * speed; self.y += ddy * speed
-                self.rect.x = int(self.x); self.rect.y = int(self.y) + INFO_BAR_HEIGHT
+                self.x += ddx * speed;
+                self.y += ddy * speed
+                self.rect.x = int(self.x);
+                self.rect.y = int(self.y) + INFO_BAR_HEIGHT
                 break
 
     def draw(self, screen):
@@ -595,8 +568,10 @@ def heuristic(a, b): return abs(a[0] - b[0]) + abs(a[1] - b[1])
 
 def a_star_search(graph: Graph, start: Tuple[int, int], goal: Tuple[int, int],
                   obstacles: Dict[Tuple[int, int], Obstacle]):
-    frontier = PriorityQueue(); frontier.put((0, start))
-    came_from = {start: None}; cost_so_far = {start: 0}
+    frontier = PriorityQueue();
+    frontier.put((0, start))
+    came_from = {start: None};
+    cost_so_far = {start: 0}
     while not frontier.empty():
         _, current = frontier.get()
         if current == goal: break
@@ -619,7 +594,8 @@ def a_star_search(graph: Graph, start: Tuple[int, int], goal: Tuple[int, int],
 
 
 def is_not_edge(pos, grid_size):
-    x, y = pos; return 1 <= x < grid_size - 1 and 1 <= y < grid_size - 1
+    x, y = pos;
+    return 1 <= x < grid_size - 1 and 1 <= y < grid_size - 1
 
 
 def get_level_config(level: int) -> dict:
@@ -637,10 +613,14 @@ def get_level_config(level: int) -> dict:
 
 def reconstruct_path(came_from: Dict, start: Tuple[int, int], goal: Tuple[int, int]) -> List[Tuple[int, int]]:
     if goal not in came_from: return [start]
-    path = []; current = goal
+    path = [];
+    current = goal
     while current != start:
-        path.append(current); current = came_from[current]
-    path.append(start); path.reverse(); return path
+        path.append(current);
+        current = came_from[current]
+    path.append(start);
+    path.reverse();
+    return path
 
 
 # ==================== 游戏初始化函数 ====================
@@ -671,11 +651,13 @@ def generate_game_entities(grid_size: int, obstacle_count: int, item_count: int,
         zombie_pos_list = random.sample(far_candidates, zombie_count)
     else:
         player_pos, zombie_pos_list = pick_valid_positions(min_distance=5, count=zombie_count)
-    forbidden |= {player_pos}; forbidden |= set(zombie_pos_list)
+    forbidden |= {player_pos};
+    forbidden |= set(zombie_pos_list)
 
     # main item + main block
     main_item_candidates = [p for p in all_positions if p not in forbidden and is_not_edge(p, grid_size)]
-    main_item_pos = random.choice(main_item_candidates); forbidden.add(main_item_pos)
+    main_item_pos = random.choice(main_item_candidates);
+    forbidden.add(main_item_pos)
     obstacles = {main_item_pos: MainBlock(main_item_pos[0], main_item_pos[1], health=main_block_hp)}
 
     # --- obstacle fill with clusters ---
@@ -774,7 +756,8 @@ class GameState:
             if player_rect.colliderect(item.rect):
                 if item.is_main and any(getattr(ob, "is_main_block", False) for ob in self.obstacles.values()):
                     return False
-                self.items.remove(item); return True
+                self.items.remove(item);
+                return True
         return False
 
     def destroy_obstacle(self, pos: Tuple[int, int]):
@@ -825,12 +808,16 @@ def render_game(screen: pygame.Surface, game_state, player: Player, zombies: Lis
         pygame.draw.circle(screen, color, draw_pos, item.radius)
 
     # player
-    player_draw = player.rect.copy(); player_draw.x -= cam_x; player_draw.y -= cam_y
+    player_draw = player.rect.copy();
+    player_draw.x -= cam_x;
+    player_draw.y -= cam_y
     pygame.draw.rect(screen, (0, 255, 0), player_draw)
 
     # zombies
     for zombie in zombies:
-        zr = zombie.rect.copy(); zr.x -= cam_x; zr.y -= cam_y
+        zr = zombie.rect.copy();
+        zr.x -= cam_x;
+        zr.y -= cam_y
         pygame.draw.rect(screen, (255, 60, 60), zr)
 
     # obstacles
@@ -842,7 +829,9 @@ def render_game(screen: pygame.Surface, game_state, player: Player, zombies: Lis
             color = (120, 120, 120)
         else:
             color = (200, 80, 80)
-        draw_rect = obstacle.rect.copy(); draw_rect.x -= cam_x; draw_rect.y -= cam_y
+        draw_rect = obstacle.rect.copy();
+        draw_rect.x -= cam_x;
+        draw_rect.y -= cam_y
         pygame.draw.rect(screen, color, draw_rect)
         if obstacle.type == "Destructible":
             font2 = pygame.font.SysFont(None, 30)
@@ -884,7 +873,9 @@ def main_run_level(config, chosen_zombie_type: str) -> Tuple[str, Optional[str],
     zt = ztype_map.get(chosen_zombie_type, "basic")
     zombies = [Zombie(pos, speed=ZOMBIE_SPEED, ztype=zt) for pos in zombie_starts]
 
-    running = True; game_result = None; last_frame = None
+    running = True;
+    game_result = None;
+    last_frame = None
     while running:
         dt = clock.tick(60) / 1000.0
         for event in pygame.event.get():
@@ -905,8 +896,6 @@ def main_run_level(config, chosen_zombie_type: str) -> Tuple[str, Optional[str],
                         show_settings_popup(screen, bg)
                     elif pause_choice == 'home':
                         return 'home', config.get('reward', None), bg
-                    elif pause_choice == 'exit':
-                        return 'exit', config.get('reward', None), bg
             if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
                 pause_choice = show_pause_menu(screen, last_frame or render_game(screen, game_state, player, zombies))
                 if pause_choice == 'continue':
@@ -917,8 +906,6 @@ def main_run_level(config, chosen_zombie_type: str) -> Tuple[str, Optional[str],
                     show_settings_popup(screen, last_frame or render_game(screen, game_state, player, zombies))
                 elif pause_choice == 'home':
                     return 'home', config.get('reward', None), last_frame or screen.copy()
-                elif pause_choice == 'exit':
-                    return 'exit', config.get('reward', None), last_frame or screen.copy()
         keys = pygame.key.get_pressed()
         player.move(keys, game_state.obstacles)
         game_state.collect_item(player.rect)
@@ -926,9 +913,12 @@ def main_run_level(config, chosen_zombie_type: str) -> Tuple[str, Optional[str],
             zombie.move_and_attack(player, list(game_state.obstacles.values()), game_state, dt=dt)
             player_rect = pygame.Rect(int(player.x), int(player.y) + INFO_BAR_HEIGHT, player.size, player.size)
             if zombie.rect.colliderect(player_rect):
-                game_result = "fail"; running = False; break
+                game_result = "fail";
+                running = False;
+                break
         if not game_state.items:
-            game_result = "success"; running = False
+            game_result = "success";
+            running = False
         last_frame = render_game(pygame.display.get_surface(), game_state, player, zombies)
     return game_result, config.get("reward", None), last_frame
 
@@ -958,12 +948,15 @@ def select_zombie_screen(screen, owned_cards: List[str]) -> str:
                 for rect, card in rects:
                     if rect.collidepoint(event.pos): chosen = card
                 if confirm.collidepoint(event.pos) and (chosen or owned_cards):
-                    door_transition(screen); return chosen or owned_cards[0]
+                    door_transition(screen);
+                    return chosen or owned_cards[0]
         clock.tick(60)
 
 
 # ==================== 入口 ====================
 if __name__ == "__main__":
+    import os
+
     os.environ['SDL_VIDEO_CENTERED'] = '0'
     os.environ['SDL_VIDEO_WINDOW_POS'] = '0,0'
     pygame.init()
@@ -973,65 +966,26 @@ if __name__ == "__main__":
     pygame.display.set_caption(GAME_TITLE)
     VIEW_W, VIEW_H = info.current_w, info.current_h
 
-    # Start menu (now supports CONTINUE)
-    selection = show_start_menu(screen)
-    if not selection:
-        sys.exit()
-    mode, save_data = selection
+    # Start menu
+    if not show_start_menu(screen): sys.exit()
 
-    # Initialize progress
-    if mode == "continue" and save_data:
-        current_level = int(save_data.get("current_level", 0))
-        zombie_cards_collected: List[str] = list(save_data.get("zombie_cards_collected", []))
-    else:
-        # New game wipes previous save
-        clear_save()
-        current_level = 0
-        zombie_cards_collected: List[str] = []
+    current_level = 0
+    zombie_cards_collected: List[str] = []
 
     while True:
         config = get_level_config(current_level)
         chosen_zombie = select_zombie_screen(screen, zombie_cards_collected) if zombie_cards_collected else "basic"
         door_transition(screen)
         result, reward, bg = main_run_level(config, chosen_zombie)
-
-        # Handle outcomes (including 'exit' which saves and quits)
         if result == "restart":
             continue
         if result == "home":
-            selection = show_start_menu(screen)
-            if not selection:
-                sys.exit()
-            mode, save_data = selection
-            if mode == "continue" and save_data:
-                current_level = int(save_data.get("current_level", 0))
-                zombie_cards_collected = list(save_data.get("zombie_cards_collected", []))
-            else:
-                clear_save()
-                current_level = 0
-                zombie_cards_collected = []
+            show_start_menu(screen);
             continue
-        if result == "exit":
-            # Save current progress (resume at start of this level later)
-            save_progress(current_level, zombie_cards_collected)
-            pygame.quit(); sys.exit()
-
         if result == "fail":
-            # On fail, allow retry/home; also auto-save progress so CONTINUE resumes this level
-            save_progress(current_level, zombie_cards_collected)
             action = show_fail_screen(screen, bg)
             if action == "home":
-                selection = show_start_menu(screen)
-                if not selection:
-                    sys.exit()
-                mode, save_data = selection
-                if mode == "continue" and save_data:
-                    current_level = int(save_data.get("current_level", 0))
-                    zombie_cards_collected = list(save_data.get("zombie_cards_collected", []))
-                else:
-                    clear_save()
-                    current_level = 0
-                    zombie_cards_collected = []
+                show_start_menu(screen);
                 continue
             else:
                 continue
@@ -1042,21 +996,8 @@ if __name__ == "__main__":
             if chosen:
                 zombie_cards_collected.append(chosen)
             current_level += 1
-            # Save after a successful level too
-            save_progress(current_level, zombie_cards_collected)
         else:
-            # Unknown state -> go home
-            selection = show_start_menu(screen)
-            if not selection:
-                sys.exit()
-            mode, save_data = selection
-            if mode == "continue" and save_data:
-                current_level = int(save_data.get("current_level", 0))
-                zombie_cards_collected = list(save_data.get("zombie_cards_collected", []))
-            else:
-                clear_save()
-                current_level = 0
-                zombie_cards_collected = []
+            show_start_menu(screen)
 
 # TODO
 # I just figure out the main purpose of this game!
