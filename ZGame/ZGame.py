@@ -64,7 +64,10 @@ DIRECTIONS = {
 }
 
 # ==================== Save/Load Helpers ====================
-SAVE_FILE = os.path.join(os.path.dirname(__file__) if '__file__' in globals() else '.', 'savegame.json')
+BASE_DIR = os.path.dirname(__file__) if "__file__" in globals() else os.getcwd()
+SAVE_DIR = os.path.join(BASE_DIR, "TEMP")
+os.makedirs(SAVE_DIR, exist_ok=True)
+SAVE_FILE = os.path.join(SAVE_DIR, "savegame.json")
 
 
 
@@ -244,13 +247,15 @@ def show_start_menu(screen):
         gap_x = 36
         top_y = 260
         btn_w = 180
-        # START NEW (left) and HOW TO PLAY (right)
-        start_rect = draw_button(screen, "START NEW", (VIEW_W // 2 - btn_w - gap_x//2, top_y))
+        # START (left) and HOW TO PLAY (right)
+        saved_exists = has_save()
+        start_label = "START NEW" if saved_exists else "START"
+        start_rect = draw_button(screen, start_label, (VIEW_W // 2 - btn_w - gap_x//2, top_y))
         how_rect = draw_button(screen, "HOW TO PLAY", (VIEW_W // 2 + gap_x//2, top_y))
 
         cont_rect = None
         next_y = top_y + 80
-        if has_save():
+        if saved_exists:
             # Centered CONTINUE if save exists
             cont_rect = draw_button(screen, "CONTINUE", (VIEW_W // 2 - btn_w//2, next_y))
             next_y += 80
@@ -1081,13 +1086,14 @@ def run_from_snapshot(save_data: dict) -> Tuple[str, Optional[str], pygame.Surfa
             zombie.move_and_attack(player, list(game_state.obstacles.values()), game_state, dt=dt)
             player_rect = pygame.Rect(int(player.x), int(player.y) + INFO_BAR_HEIGHT, player.size, player.size)
             if zombie.rect.colliderect(player_rect):
-                # On death, we can still snapshot to resume later
-                snap2 = capture_snapshot(game_state, player, zombies, current_level, zombie_cards_collected, chosen_zombie_type)
-                save_snapshot(snap2)
+                # On death: do NOT keep any save; wipe and go to fail UI
+                clear_save()
                 action = show_fail_screen(screen, last_frame or render_game(screen, game_state, player, zombies))
                 if action == "home":
+                    clear_save()
                     flush_events(); return "home", None, last_frame or screen.copy()
                 elif action == "retry":
+                    clear_save()
                     flush_events(); return "restart", None, last_frame or screen.copy()
         if not game_state.items:
             # success flow handled in outer loop; snapshot not needed
@@ -1201,27 +1207,21 @@ if __name__ == "__main__":
             pygame.quit(); sys.exit()
 
         if result == "fail":
-            # On fail, meta-save so CONTINUE resumes this level at start (or we could snapshot - already saved in resume loop)
-            save_progress(current_level, zombie_cards_collected)
+            # On fail, wipe any save so there is NO CONTINUE on the homepage
+            clear_save()
             action = show_fail_screen(screen, bg)
             flush_events()
             if action == "home":
+                # ensure save is gone before drawing the menu
+                clear_save()
                 selection = show_start_menu(screen)
                 if not selection:
                     sys.exit()
                 mode, save_data = selection
-                if mode == "continue" and save_data:
-                    if save_data.get("mode") == "snapshot":
-                        meta = save_data.get("meta", {})
-                        current_level = int(meta.get("current_level", 0))
-                        zombie_cards_collected = list(meta.get("zombie_cards_collected", []))
-                    else:
-                        current_level = int(save_data.get("current_level", 0))
-                        zombie_cards_collected = list(save_data.get("zombie_cards_collected", []))
-                else:
-                    clear_save()
-                    current_level = 0
-                    zombie_cards_collected = []
+                # After a fail we always start fresh; ignore any 'continue'
+                clear_save()
+                current_level = 0
+                zombie_cards_collected = []
                 continue
             else:
                 continue
