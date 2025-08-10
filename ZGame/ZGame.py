@@ -7,6 +7,14 @@ import os
 from queue import PriorityQueue
 from typing import Dict, List, Set, Tuple, Optional
 
+# --- Event queue helper to prevent ghost clicks ---
+def flush_events():
+    try:
+        pygame.event.clear()
+    except Exception:
+        pass
+
+
 # ==================== 游戏常量配置 ====================
 # NOTE: Keep design notes & TODOs below; do not delete when refactoring.
 # - Card system UI polish (later pass)
@@ -59,33 +67,91 @@ DIRECTIONS = {
 SAVE_FILE = os.path.join(os.path.dirname(__file__) if '__file__' in globals() else '.', 'savegame.json')
 
 
+
 def save_progress(current_level: int, zombie_cards_collected: List[str]) -> None:
-    """Persist minimal progress so player can CONTINUE later (resume from the start of the same level)."""
+    """Save lightweight meta progress (resume from level start)."""
     data = {
+        "mode": "meta",
+        "version": 2,
         "current_level": int(current_level),
         "zombie_cards_collected": list(zombie_cards_collected),
-        "version": 1
     }
     try:
         with open(SAVE_FILE, 'w', encoding='utf-8') as f:
             json.dump(data, f)
     except Exception as e:
-        # Non-fatal: just print to stderr for debugging
         print(f"[Save] Failed to write save file: {e}", file=sys.stderr)
 
 
-def load_progress() -> Optional[dict]:
-    """Load progress if present; returns dict or None."""
+def capture_snapshot(game_state, player, zombies, current_level: int, zombie_cards_collected: List[str], chosen_zombie_type: str = "basic") -> dict:
+    """Create a full mid-run snapshot of the current game state."""
+    snap = {
+        "mode": "snapshot",
+        "version": 2,
+        "meta": {
+            "current_level": int(current_level),
+            "zombie_cards_collected": list(zombie_cards_collected),
+            "chosen_zombie_type": str(chosen_zombie_type or "basic"),
+        },
+        "snapshot": {
+            "player": {"x": float(player.x), "y": float(player.y), "speed": player.speed, "size": player.size},
+            "zombies": [{
+                "x": float(z.x), "y": float(z.y),
+                "attack": int(getattr(z, "attack", 10)),
+                "speed": int(getattr(z, "speed", 2)),
+                "type": str(getattr(z, "type", "basic")),
+                "spawn_elapsed": float(getattr(z, "_spawn_elapsed", 0.0)),
+                "attack_timer": float(getattr(z, "attack_timer", 0.0)),
+            } for z in zombies],
+            "obstacles": [{
+                "x": int(ob.rect.x // CELL_SIZE),
+                "y": int((ob.rect.y - INFO_BAR_HEIGHT) // CELL_SIZE),
+                "type": ob.type,
+                "health": None if ob.health is None else int(ob.health),
+                "main": bool(getattr(ob, "is_main_block", False)),
+            } for ob in game_state.obstacles.values()],
+            "items": [{
+                "x": int(it.x),
+                "y": int(it.y),
+                "is_main": bool(it.is_main),
+            } for it in game_state.items],
+            "decorations": [[int(dx), int(dy)] for (dx, dy) in getattr(game_state, "decorations", [])],
+        }
+    }
+    return snap
+
+
+def save_snapshot(snapshot: dict) -> None:
+    """Write a snapshot dict to disk."""
+    try:
+        with open(SAVE_FILE, 'w', encoding='utf-8') as f:
+            json.dump(snapshot, f)
+    except Exception as e:
+        print(f"[Save] Failed to write snapshot: {e}", file=sys.stderr)
+
+
+def load_save() -> Optional[dict]:
+    """Load either meta or snapshot save; returns dict with 'mode' field or None."""
     try:
         if not os.path.exists(SAVE_FILE):
             return None
         with open(SAVE_FILE, 'r', encoding='utf-8') as f:
             data = json.load(f)
-        # Basic sanity
         if not isinstance(data, dict):
             return None
-        data.setdefault("current_level", 0)
-        data.setdefault("zombie_cards_collected", [])
+        # v1 compatibility (no mode)
+        if "mode" not in data:
+            data["mode"] = "meta"
+        # normalize fields
+        if data["mode"] == "meta":
+            data.setdefault("current_level", 0)
+            data.setdefault("zombie_cards_collected", [])
+        elif data["mode"] == "snapshot":
+            data.setdefault("meta", {})
+            data["meta"].setdefault("current_level", 0)
+            data["meta"].setdefault("zombie_cards_collected", [])
+            data["meta"].setdefault("chosen_zombie_type", "basic")
+            data.setdefault("snapshot", {})
         return data
     except Exception as e:
         print(f"[Save] Failed to read save file: {e}", file=sys.stderr)
@@ -115,6 +181,7 @@ def draw_button(screen, label, pos, size=(180, 56), bg=(40, 40, 40), fg=(240, 24
     return rect
 
 
+
 def door_transition(screen, color=(0, 0, 0), duration=500):
     door_width = VIEW_W // 2
     left_rect = pygame.Rect(0, 0, 0, VIEW_H)
@@ -135,6 +202,7 @@ def door_transition(screen, color=(0, 0, 0), duration=500):
         pygame.display.flip()
         if progress >= 1: break
         clock.tick(60)
+    flush_events()
 
 
 def draw_settings_gear(screen, x, y):
@@ -154,8 +222,10 @@ def draw_settings_gear(screen, x, y):
     return rect
 
 
+
 def show_start_menu(screen):
     """Return a tuple ('new', None) or ('continue', save_data) based on player's choice."""
+    flush_events()
     clock = pygame.time.Clock()
     title_font = pygame.font.SysFont(None, 64)
     subtitle_font = pygame.font.SysFont(None, 24)
@@ -169,18 +239,25 @@ def show_start_menu(screen):
         screen.blit(title, title.get_rect(center=(VIEW_W // 2, 140)))
         sub = subtitle_font.render("A pixel roguelite of memory and monsters", True, (160, 160, 150))
         screen.blit(sub, sub.get_rect(center=(VIEW_W // 2, 180)))
-        # buttons
-        left_x = VIEW_W // 2 - 290
-        right_x = VIEW_W // 2 + 20
-        start_rect = draw_button(screen, "START NEW", (left_x, 260))
-        how_rect = draw_button(screen, "HOW TO PLAY", (right_x, 260))
-        y2 = 340
+
+        # structured layout
+        gap_x = 36
+        top_y = 260
+        btn_w = 180
+        # START NEW (left) and HOW TO PLAY (right)
+        start_rect = draw_button(screen, "START NEW", (VIEW_W // 2 - btn_w - gap_x//2, top_y))
+        how_rect = draw_button(screen, "HOW TO PLAY", (VIEW_W // 2 + gap_x//2, top_y))
+
+        cont_rect = None
+        next_y = top_y + 80
         if has_save():
-            cont_rect = draw_button(screen, "CONTINUE", (left_x, y2))
-            exit_rect = draw_button(screen, "EXIT", (right_x, y2))
-        else:
-            cont_rect = None
-            exit_rect = draw_button(screen, "EXIT", (VIEW_W // 2 - 90, y2))
+            # Centered CONTINUE if save exists
+            cont_rect = draw_button(screen, "CONTINUE", (VIEW_W // 2 - btn_w//2, next_y))
+            next_y += 80
+
+        # EXIT centered at bottom
+        exit_rect = draw_button(screen, "EXIT", (VIEW_W // 2 - btn_w//2, next_y))
+
         gear_rect = draw_settings_gear(screen, VIEW_W - 44, 8)
         pygame.display.flip()
 
@@ -189,20 +266,22 @@ def show_start_menu(screen):
                 pygame.quit(); sys.exit()
             if event.type == pygame.MOUSEBUTTONDOWN:
                 if gear_rect.collidepoint(event.pos):
-                    show_settings_popup(screen, screen.copy())
-                if start_rect.collidepoint(event.pos):
-                    door_transition(screen)
+                    show_settings_popup(screen, screen.copy()); flush_events()
+                elif start_rect.collidepoint(event.pos):
+                    door_transition(screen); flush_events()
+                    # Starting new game clears any existing save
                     return ("new", None)
-                if cont_rect and cont_rect.collidepoint(event.pos):
-                    data = load_progress()
+                elif cont_rect and cont_rect.collidepoint(event.pos):
+                    data = load_save()
                     if data:
-                        door_transition(screen)
+                        door_transition(screen); flush_events()
                         return ("continue", data)
-                if exit_rect.collidepoint(event.pos):
+                elif exit_rect.collidepoint(event.pos):
                     pygame.quit(); sys.exit()
-                if how_rect.collidepoint(event.pos):
-                    show_help(screen)
+                elif how_rect.collidepoint(event.pos):
+                    show_help(screen); flush_events()
         clock.tick(60)
+
 
 
 def show_help(screen):
@@ -228,26 +307,17 @@ def show_help(screen):
         for event in pygame.event.get():
             if event.type == pygame.QUIT: pygame.quit(); sys.exit()
             if event.type == pygame.MOUSEBUTTONDOWN:
-                # gear click detection (top-right HUD)
                 hud_gear = pygame.Rect(VIEW_W - 44, 8, 32, 24)
                 if hud_gear.collidepoint(event.pos):
                     bg = pygame.display.get_surface().copy()
-                    # open settings first, then show pause menu (settings pre-selected feel)
                     show_settings_popup(screen, bg)
-                    pause_choice = show_pause_menu(screen, bg)
-                    if pause_choice == 'continue':
-                        pass
-                    elif pause_choice == 'restart':
-                        return 'restart', config.get('reward', None), bg
-                    elif pause_choice == 'settings':
-                        show_settings_popup(screen, bg)
-                    elif pause_choice == 'home':
-                        return 'home', config.get('reward', None), bg
+                    show_settings_popup(screen, bg)
             if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
-                door_transition(screen); return
+                door_transition(screen); flush_events(); return
             if event.type == pygame.MOUSEBUTTONDOWN and back.collidepoint(event.pos):
-                door_transition(screen); return
+                door_transition(screen); flush_events(); return
         clock.tick(60)
+
 
 
 def show_fail_screen(screen, background_surf):
@@ -263,26 +333,17 @@ def show_fail_screen(screen, background_surf):
         for event in pygame.event.get():
             if event.type == pygame.QUIT: pygame.quit(); sys.exit()
             if event.type == pygame.MOUSEBUTTONDOWN:
-                # gear click detection (top-right HUD)
                 hud_gear = pygame.Rect(VIEW_W - 44, 8, 32, 24)
                 if hud_gear.collidepoint(event.pos):
                     bg = pygame.display.get_surface().copy()
-                    # open settings first, then show pause menu (settings pre-selected feel)
                     show_settings_popup(screen, bg)
-                    pause_choice = show_pause_menu(screen, bg)
-                    if pause_choice == 'continue':
-                        pass
-                    elif pause_choice == 'restart':
-                        return 'restart', config.get('reward', None), bg
-                    elif pause_choice == 'settings':
-                        show_settings_popup(screen, bg)
-                    elif pause_choice == 'home':
-                        return 'home', config.get('reward', None), bg
+                    show_settings_popup(screen, bg)
             if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
-                door_transition(screen); return
+                door_transition(screen); flush_events(); return
             if event.type == pygame.MOUSEBUTTONDOWN:
-                if retry.collidepoint(event.pos): door_transition(screen); return "retry"
-                if home.collidepoint(event.pos): door_transition(screen); return "home"
+                if retry.collidepoint(event.pos): door_transition(screen); flush_events(); return "retry"
+                if home.collidepoint(event.pos): door_transition(screen); flush_events(); return "home"
+
 
 
 def show_success_screen(screen, background_surf, reward_choices):
@@ -291,7 +352,6 @@ def show_success_screen(screen, background_surf, reward_choices):
     screen.blit(dim, (0, 0))
     title = pygame.font.SysFont(None, 80).render("MEMORY RESTORED!", True, (0, 255, 120))
     screen.blit(title, title.get_rect(center=(VIEW_W // 2, 100)))
-    # cards
     card_rects = []
     for i, card in enumerate(reward_choices):
         x = VIEW_W // 2 - (len(reward_choices) * 140) // 2 + i * 140
@@ -309,33 +369,26 @@ def show_success_screen(screen, background_surf, reward_choices):
         for event in pygame.event.get():
             if event.type == pygame.QUIT: pygame.quit(); sys.exit()
             if event.type == pygame.MOUSEBUTTONDOWN:
-                # gear click detection (top-right HUD)
                 hud_gear = pygame.Rect(VIEW_W - 44, 8, 32, 24)
                 if hud_gear.collidepoint(event.pos):
                     bg = pygame.display.get_surface().copy()
-                    # open settings first, then show pause menu (settings pre-selected feel)
                     show_settings_popup(screen, bg)
-                    pause_choice = show_pause_menu(screen, bg)
-                    if pause_choice == 'continue':
-                        pass
-                    elif pause_choice == 'restart':
-                        return 'restart', config.get('reward', None), bg
-                    elif pause_choice == 'settings':
-                        show_settings_popup(screen, bg)
-                    elif pause_choice == 'home':
-                        return 'home', config.get('reward', None), bg
+                    show_settings_popup(screen, bg)
             if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
-                door_transition(screen); return
+                door_transition(screen); flush_events(); return
             if event.type == pygame.MOUSEBUTTONDOWN:
                 for rect, card in card_rects:
                     if rect.collidepoint(event.pos): chosen = card
                 if next_btn.collidepoint(event.pos) and (chosen or len(reward_choices) == 0):
-                    door_transition(screen); return chosen
+                    door_transition(screen); flush_events(); return chosen
+
+
 
 
 def show_pause_menu(screen, background_surf):
+    """Draw pause overlay and return an action tag."""
     dim = pygame.Surface((VIEW_W, VIEW_H), pygame.SRCALPHA)
-    dim.fill((0, 0, 0, 170))  # semi-transparent
+    dim.fill((0, 0, 0, 170))
     bg_scaled = pygame.transform.smoothscale(background_surf, (VIEW_W, VIEW_H))
     screen.blit(bg_scaled, (0, 0))
     screen.blit(dim, (0, 0))
@@ -349,12 +402,11 @@ def show_pause_menu(screen, background_surf):
     title = pygame.font.SysFont(None, 72).render("Paused", True, (230, 230, 230))
     screen.blit(title, title.get_rect(center=(panel.centerx, panel.top + 58)))
 
-    # Buttons stacked in panel
     btn_w, btn_h = 300, 56
     spacing = 14
     start_y = panel.top + 110
     btns = []
-    labels = [("CONTINUE  (ESC)", "continue"),
+    labels = [("CONTINUE", "continue"),
               ("RESTART", "restart"),
               ("SETTINGS", "settings"),
               ("BACK TO HOMEPAGE", "home"),
@@ -365,7 +417,7 @@ def show_pause_menu(screen, background_surf):
         rect = pygame.Rect(x, y, btn_w, btn_h)
         pygame.draw.rect(screen, (15, 15, 15), rect.inflate(6, 6), border_radius=10)
         if tag == "exit":
-            pygame.draw.rect(screen, (120, 40, 40), rect, border_radius=10)  # red
+            pygame.draw.rect(screen, (120, 40, 40), rect, border_radius=10)
         else:
             pygame.draw.rect(screen, (50, 50, 50), rect, border_radius=10)
         txt = pygame.font.SysFont(None, 32).render(label, True, (235, 235, 235))
@@ -379,14 +431,15 @@ def show_pause_menu(screen, background_surf):
             if event.type == pygame.QUIT:
                 pygame.quit(); sys.exit()
             if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
-                return "continue"
+                flush_events(); return "continue"
             if event.type == pygame.MOUSEBUTTONDOWN:
                 for rect, tag in btns:
                     if rect.collidepoint(event.pos):
-                        return tag
+                        flush_events(); return tag
 
 
 def show_settings_popup(screen, background_surf):
+    """Simple volume settings popup with two sliders."""
     global FX_VOLUME, BGM_VOLUME
     dim = pygame.Surface((VIEW_W, VIEW_H), pygame.SRCALPHA)
     dim.fill((0, 0, 0, 170))
@@ -414,11 +467,9 @@ def show_settings_popup(screen, background_surf):
 
     fx_val = FX_VOLUME
     bgm_val = BGM_VOLUME
-
     fx_bar = draw_slider("Effects Volume", fx_val, panel.top + 110)
     bgm_bar = draw_slider("BGM Volume", bgm_val, panel.top + 160)
 
-    # Close button
     btn_w, btn_h = 200, 56
     close = pygame.Rect(0, 0, btn_w, btn_h)
     close.center = (panel.centerx, panel.bottom - 50)
@@ -433,19 +484,16 @@ def show_settings_popup(screen, background_surf):
         for event in pygame.event.get():
             if event.type == pygame.QUIT: pygame.quit(); sys.exit()
             if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
-                return "close"
+                flush_events(); return "close"
             if event.type == pygame.MOUSEBUTTONDOWN:
                 mx, my = event.pos
-                for which, bar in (('fx', fx_bar), ('bgm', bgm_bar)):
-                    if bar.collidepoint((mx, my)):
-                        val = int(((mx - bar.x) / bar.width) * 100); val = max(0, min(100, val))
-                        if which == 'fx': fx_val = val
-                        if which == 'bgm': bgm_val = val
-                if close.collidepoint((mx, my)):
-                    FX_VOLUME = fx_val
-                    BGM_VOLUME = bgm_val
-                    return "close"
-
+                if fx_bar.collidepoint((mx, my)):
+                    fx_val = max(0, min(100, int(((mx - fx_bar.x) / fx_bar.width) * 100)))
+                elif bgm_bar.collidepoint((mx, my)):
+                    bgm_val = max(0, min(100, int(((mx - bgm_bar.x) / bgm_bar.width) * 100)))
+                elif close.collidepoint((mx, my)):
+                    FX_VOLUME = fx_val; BGM_VOLUME = bgm_val
+                    flush_events(); return "close"
 
 # ==================== 数据结构 ====================
 class Graph:
@@ -857,6 +905,7 @@ def render_game(screen: pygame.Surface, game_state, player: Player, zombies: Lis
 
 
 # ==================== 游戏主循环 ====================
+
 def main_run_level(config, chosen_zombie_type: str) -> Tuple[str, Optional[str], pygame.Surface]:
     pygame.display.set_caption("Zombie Card Game – Level")
     screen = pygame.display.get_surface()
@@ -890,34 +939,42 @@ def main_run_level(config, chosen_zombie_type: str) -> Tuple[str, Optional[str],
         for event in pygame.event.get():
             if event.type == pygame.QUIT: pygame.quit(); sys.exit()
             if event.type == pygame.MOUSEBUTTONDOWN:
-                # gear click detection (top-right HUD)
                 hud_gear = pygame.Rect(VIEW_W - 44, 8, 32, 24)
                 if hud_gear.collidepoint(event.pos):
                     bg = pygame.display.get_surface().copy()
-                    # open settings first, then show pause menu (settings pre-selected feel)
                     show_settings_popup(screen, bg)
                     pause_choice = show_pause_menu(screen, bg)
                     if pause_choice == 'continue':
                         pass
                     elif pause_choice == 'restart':
-                        return 'restart', config.get('reward', None), bg
+                        flush_events(); return 'restart', config.get('reward', None), bg
                     elif pause_choice == 'settings':
                         show_settings_popup(screen, bg)
                     elif pause_choice == 'home':
+                        # snapshot-save, return to homepage
+                        snap = capture_snapshot(game_state, player, zombies, current_level, zombie_cards_collected, zt)
+                        save_snapshot(snap); flush_events()
                         return 'home', config.get('reward', None), bg
                     elif pause_choice == 'exit':
+                        # snapshot-save and exit app
+                        snap = capture_snapshot(game_state, player, zombies, current_level, zombie_cards_collected, zt)
+                        save_snapshot(snap); flush_events()
                         return 'exit', config.get('reward', None), bg
             if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
                 pause_choice = show_pause_menu(screen, last_frame or render_game(screen, game_state, player, zombies))
                 if pause_choice == 'continue':
                     pass
                 elif pause_choice == 'restart':
-                    return 'restart', config.get('reward', None), last_frame or screen.copy()
+                    flush_events(); return 'restart', config.get('reward', None), last_frame or screen.copy()
                 elif pause_choice == 'settings':
                     show_settings_popup(screen, last_frame or render_game(screen, game_state, player, zombies))
                 elif pause_choice == 'home':
+                    snap = capture_snapshot(game_state, player, zombies, current_level, zombie_cards_collected, zt)
+                    save_snapshot(snap); flush_events()
                     return 'home', config.get('reward', None), last_frame or screen.copy()
                 elif pause_choice == 'exit':
+                    snap = capture_snapshot(game_state, player, zombies, current_level, zombie_cards_collected, zt)
+                    save_snapshot(snap); flush_events()
                     return 'exit', config.get('reward', None), last_frame or screen.copy()
         keys = pygame.key.get_pressed()
         player.move(keys, game_state.obstacles)
@@ -932,7 +989,111 @@ def main_run_level(config, chosen_zombie_type: str) -> Tuple[str, Optional[str],
         last_frame = render_game(pygame.display.get_surface(), game_state, player, zombies)
     return game_result, config.get("reward", None), last_frame
 
+def run_from_snapshot(save_data: dict) -> Tuple[str, Optional[str], pygame.Surface]:
+    """Resume a game from a snapshot in save_data; same return contract as main_run_level."""
+    assert save_data.get("mode") == "snapshot"
+    meta = save_data.get("meta", {})
+    snap = save_data.get("snapshot", {})
+    # Recreate entities
+    # Obstacles
+    obstacles: Dict[Tuple[int,int], Obstacle] = {}
+    for o in snap.get("obstacles", []):
+        typ = o.get("type", "Indestructible")
+        x, y = int(o.get("x", 0)), int(o.get("y", 0))
+        if o.get("main", False):
+            ob = MainBlock(x, y, health=o.get("health", MAIN_BLOCK_HEALTH))
+        else:
+            ob = Obstacle(x, y, typ, health=o.get("health", None))
+        obstacles[(x, y)] = ob
+    # Items
+    items = set()
+    for it in snap.get("items", []):
+        items.add(Item(int(it.get("x", 0)), int(it.get("y", 0)), bool(it.get("is_main", False))))
+    # Decorations
+    decorations = [tuple(d) for d in snap.get("decorations", [])]
+    game_state = GameState(obstacles, items, [ (i.x, i.y) for i in items if getattr(i,'is_main', False) ], decorations)
+    # Player
+    p = snap.get("player", {})
+    player = Player((0,0), speed=int(p.get("speed", PLAYER_SPEED)))
+    player.x = float(p.get("x", 0.0)); player.y = float(p.get("y", 0.0))
+    player.rect.x = int(player.x); player.rect.y = int(player.y) + INFO_BAR_HEIGHT
+    # Zombies
+    zombies: List[Zombie] = []
+    for z in snap.get("zombies", []):
+        zobj = Zombie((0,0), attack=int(z.get("attack", ZOMBIE_ATTACK)), speed=int(z.get("speed", ZOMBIE_SPEED)), ztype=z.get("type","basic"))
+        zobj.x = float(z.get("x", 0.0)); zobj.y = float(z.get("y", 0.0))
+        zobj.rect.x = int(zobj.x); zobj.rect.y = int(zobj.y) + INFO_BAR_HEIGHT
+        zobj._spawn_elapsed = float(z.get("spawn_elapsed", 0.0))
+        zobj.attack_timer = float(z.get("attack_timer", 0.0))
+        zombies.append(zobj)
 
+    # Run main loop identical to main_run_level but without regeneration
+    screen = pygame.display.get_surface()
+    clock = pygame.time.Clock()
+    running = True; last_frame = None
+    chosen_zombie_type = meta.get("chosen_zombie_type", "basic")
+
+    while running:
+        dt = clock.tick(60) / 1000.0
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT: pygame.quit(); sys.exit()
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                hud_gear = pygame.Rect(VIEW_W - 44, 8, 32, 24)
+                if hud_gear.collidepoint(event.pos):
+                    bg = pygame.display.get_surface().copy()
+                    show_settings_popup(screen, bg)
+                    pause_choice = show_pause_menu(screen, bg)
+                    if pause_choice == 'continue':
+                        pass
+                    elif pause_choice == 'restart':
+                        flush_events(); return 'restart', None, bg
+                    elif pause_choice == 'settings':
+                        show_settings_popup(screen, bg)
+                    elif pause_choice == 'home':
+                        # Save latest snapshot and go home
+                        snap2 = capture_snapshot(game_state, player, zombies, current_level, zombie_cards_collected, chosen_zombie_type)
+                        save_snapshot(snap2); flush_events()
+                        return 'home', None, bg
+                    elif pause_choice == 'exit':
+                        snap2 = capture_snapshot(game_state, player, zombies, current_level, zombie_cards_collected, chosen_zombie_type)
+                        save_snapshot(snap2); flush_events()
+                        return 'exit', None, bg
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                pause_choice = show_pause_menu(screen, last_frame or render_game(screen, game_state, player, zombies))
+                if pause_choice == 'continue':
+                    pass
+                elif pause_choice == 'restart':
+                    flush_events(); return 'restart', None, last_frame or screen.copy()
+                elif pause_choice == 'settings':
+                    show_settings_popup(screen, last_frame or render_game(screen, game_state, player, zombies))
+                elif pause_choice == 'home':
+                    snap2 = capture_snapshot(game_state, player, zombies, current_level, zombie_cards_collected, chosen_zombie_type)
+                    save_snapshot(snap2); flush_events()
+                    return 'home', None, last_frame or screen.copy()
+                elif pause_choice == 'exit':
+                    snap2 = capture_snapshot(game_state, player, zombies, current_level, zombie_cards_collected, chosen_zombie_type)
+                    save_snapshot(snap2); flush_events()
+                    return 'exit', None, last_frame or screen.copy()
+        keys = pygame.key.get_pressed()
+        player.move(keys, game_state.obstacles)
+        game_state.collect_item(player.rect)
+        for zombie in zombies:
+            zombie.move_and_attack(player, list(game_state.obstacles.values()), game_state, dt=dt)
+            player_rect = pygame.Rect(int(player.x), int(player.y) + INFO_BAR_HEIGHT, player.size, player.size)
+            if zombie.rect.colliderect(player_rect):
+                # On death, we can still snapshot to resume later
+                snap2 = capture_snapshot(game_state, player, zombies, current_level, zombie_cards_collected, chosen_zombie_type)
+                save_snapshot(snap2)
+                action = show_fail_screen(screen, last_frame or render_game(screen, game_state, player, zombies))
+                if action == "home":
+                    flush_events(); return "home", None, last_frame or screen.copy()
+                elif action == "retry":
+                    flush_events(); return "restart", None, last_frame or screen.copy()
+        if not game_state.items:
+            # success flow handled in outer loop; snapshot not needed
+            return "success", None, last_frame or render_game(screen, game_state, player, zombies)
+        last_frame = render_game(pygame.display.get_surface(), game_state, player, zombies)
+    return "home", None, last_frame or screen.copy()
 def select_zombie_screen(screen, owned_cards: List[str]) -> str:
     if not owned_cards: return "basic"
     clock = pygame.time.Clock()
@@ -963,6 +1124,7 @@ def select_zombie_screen(screen, owned_cards: List[str]) -> str:
 
 
 # ==================== 入口 ====================
+
 if __name__ == "__main__":
     os.environ['SDL_VIDEO_CENTERED'] = '0'
     os.environ['SDL_VIDEO_WINDOW_POS'] = '0,0'
@@ -973,61 +1135,89 @@ if __name__ == "__main__":
     pygame.display.set_caption(GAME_TITLE)
     VIEW_W, VIEW_H = info.current_w, info.current_h
 
-    # Start menu (now supports CONTINUE)
+    # Enter start menu
+    flush_events()
     selection = show_start_menu(screen)
     if not selection:
         sys.exit()
     mode, save_data = selection
 
-    # Initialize progress
+    # Initialize progress holders (module-level for snapshot helpers)
     if mode == "continue" and save_data:
-        current_level = int(save_data.get("current_level", 0))
-        zombie_cards_collected: List[str] = list(save_data.get("zombie_cards_collected", []))
+        if save_data.get("mode") == "snapshot":
+            # pull meta
+            meta = save_data.get("meta", {})
+            current_level = int(meta.get("current_level", 0))
+            zombie_cards_collected = list(meta.get("zombie_cards_collected", []))
+        else:
+            current_level = int(save_data.get("current_level", 0))
+            zombie_cards_collected = list(save_data.get("zombie_cards_collected", []))
     else:
-        # New game wipes previous save
         clear_save()
         current_level = 0
-        zombie_cards_collected: List[str] = []
+        zombie_cards_collected = []
 
     while True:
-        config = get_level_config(current_level)
-        chosen_zombie = select_zombie_screen(screen, zombie_cards_collected) if zombie_cards_collected else "basic"
-        door_transition(screen)
-        result, reward, bg = main_run_level(config, chosen_zombie)
+        # If we came from CONTINUE(snapshot), resume immediately
+        if mode == "continue" and save_data and save_data.get("mode") == "snapshot":
+            door_transition(screen)
+            result, reward, bg = run_from_snapshot(save_data)
+            # after run, reset mode to normal flow
+            save_data = None
+            mode = "new"
+        else:
+            config = get_level_config(current_level)
+            chosen_zombie = select_zombie_screen(screen, zombie_cards_collected) if zombie_cards_collected else "basic"
+            door_transition(screen)
+            result, reward, bg = main_run_level(config, chosen_zombie)
 
-        # Handle outcomes (including 'exit' which saves and quits)
         if result == "restart":
-            continue
+            flush_events(); continue
+
         if result == "home":
+            flush_events()
             selection = show_start_menu(screen)
             if not selection:
                 sys.exit()
             mode, save_data = selection
             if mode == "continue" and save_data:
-                current_level = int(save_data.get("current_level", 0))
-                zombie_cards_collected = list(save_data.get("zombie_cards_collected", []))
+                # Update progress trackers
+                if save_data.get("mode") == "snapshot":
+                    meta = save_data.get("meta", {})
+                    current_level = int(meta.get("current_level", 0))
+                    zombie_cards_collected = list(meta.get("zombie_cards_collected", []))
+                else:
+                    current_level = int(save_data.get("current_level", 0))
+                    zombie_cards_collected = list(save_data.get("zombie_cards_collected", []))
             else:
+                # new game selected from menu
                 clear_save()
                 current_level = 0
                 zombie_cards_collected = []
             continue
+
         if result == "exit":
-            # Save current progress (resume at start of this level later)
-            save_progress(current_level, zombie_cards_collected)
+            # quit to OS; snapshot saving already done inside the loop
             pygame.quit(); sys.exit()
 
         if result == "fail":
-            # On fail, allow retry/home; also auto-save progress so CONTINUE resumes this level
+            # On fail, meta-save so CONTINUE resumes this level at start (or we could snapshot - already saved in resume loop)
             save_progress(current_level, zombie_cards_collected)
             action = show_fail_screen(screen, bg)
+            flush_events()
             if action == "home":
                 selection = show_start_menu(screen)
                 if not selection:
                     sys.exit()
                 mode, save_data = selection
                 if mode == "continue" and save_data:
-                    current_level = int(save_data.get("current_level", 0))
-                    zombie_cards_collected = list(save_data.get("zombie_cards_collected", []))
+                    if save_data.get("mode") == "snapshot":
+                        meta = save_data.get("meta", {})
+                        current_level = int(meta.get("current_level", 0))
+                        zombie_cards_collected = list(meta.get("zombie_cards_collected", []))
+                    else:
+                        current_level = int(save_data.get("current_level", 0))
+                        zombie_cards_collected = list(save_data.get("zombie_cards_collected", []))
                 else:
                     clear_save()
                     current_level = 0
@@ -1035,6 +1225,7 @@ if __name__ == "__main__":
                 continue
             else:
                 continue
+
         elif result == "success":
             pool = [c for c in CARD_POOL if c not in zombie_cards_collected]
             reward_choices = random.sample(pool, k=min(3, len(pool))) if pool else []
@@ -1051,8 +1242,13 @@ if __name__ == "__main__":
                 sys.exit()
             mode, save_data = selection
             if mode == "continue" and save_data:
-                current_level = int(save_data.get("current_level", 0))
-                zombie_cards_collected = list(save_data.get("zombie_cards_collected", []))
+                if save_data.get("mode") == "snapshot":
+                    meta = save_data.get("meta", {})
+                    current_level = int(meta.get("current_level", 0))
+                    zombie_cards_collected = list(meta.get("zombie_cards_collected", []))
+                else:
+                    current_level = int(save_data.get("current_level", 0))
+                    zombie_cards_collected = list(save_data.get("zombie_cards_collected", []))
             else:
                 clear_save()
                 current_level = 0
