@@ -1255,7 +1255,7 @@ if __name__ == "__main__":
                 zombie_cards_collected = []
 
 # TODO
-# I just figure out the main purpose of this game!
+# Attack MODE need to figure out
 # The item collection system can be hugely impact this game to next level
 # Player and Zombie both can collect item to upgrade, after kill zombie, player can get the experience to upgrade, and
 # I set a timer each game for winning condition, as long as player still alive, after the time is running out
